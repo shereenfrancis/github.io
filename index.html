@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perfect Date Night</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Cormorant+Garamond:wght@400;600&family=Dancing+Script:wght@600&family=Great+Vibes&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+</head>
+<body>
+    <!-- Floating Hearts Animation -->
+    <div class="hearts-bg"></div>
+
+    <!-- Add this right after body tag -->
+    <div id="particles-js" class="particles-background"></div>
+
+    <!-- Main Container -->
+    <div class="page-container">
+        <!-- Welcome Section -->
+        <div class="welcome-section">
+            <h1>Plan Your Perfect Date</h1>
+            <p class="tagline">Create unforgettable moments together</p>
+        </div>
+
+        <!-- Date Planner Tabs -->
+        <div class="date-planner">
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('mood')">Set the Mood</button>
+                <button class="tab-btn" onclick="showTab('dining')">Dining</button>
+                <button class="tab-btn" onclick="showTab('activities')">Activities</button>
+                <button class="tab-btn" onclick="showTab('entertainment')">Entertainment</button>
+                <button class="tab-btn" onclick="showTab('memories')">Memories</button>
+                <button class="tab-btn" onclick="showTab('love-languages')">Love Languages</button>
+                <button class="tab-btn" onclick="showTab('challenges')">Challenges</button>
+            </div>
+
+            <!-- Mood Section -->
+            <div id="mood" class="tab-content active">
+                <div class="mood-selector">
+                    <h2>Set the Perfect Mood</h2>
+                    <!-- Add Spotify Player Section -->
+                    <div class="music-section">
+                        <h3>Set the Mood with Music</h3>
+                        <div class="playlist-selector">
+                            <button onclick="changePlaylist('37i9dQZF1DX50QitC6Oqtn')">Romantic Dinner</button>
+                            <button onclick="changePlaylist('37i9dQZF1DWWQRwui0ExPn')">Cozy Evening</button>
+                            <button onclick="changePlaylist('37i9dQZF1DX8Uebhn9wzrS')">Chill Vibes</button>
+                            <button onclick="changePlaylist('37i9dQZF1DWXRqgorJj26U')">Dinner Jazz</button>
+                            <button onclick="changePlaylist('37i9dQZF1DX6FgQ8qLx1nS')">Soft Rock Hits</button>
+                            <button onclick="changePlaylist('37i9dQZF1DWXb9h3YPHhZz')">Classic Love Songs</button>
+                            <button onclick="changePlaylist('37i9dQZF1DX9wC1KY45plY')">Acoustic Romance</button>
+                            <button onclick="changePlaylist('37i9dQZF1DWTbzY5gOVvKd')">Candlelight Jazz</button>
+                        </div>
+                        <div class="playlist-container">
+                            <iframe 
+                                id="spotify-player"
+                                src="https://open.spotify.com/embed/playlist/37i9dQZF1DX50QitC6Oqtn" 
+                                width="100%" 
+                                height="152" 
+                                frameborder="0" 
+                                allowtransparency="true" 
+                                allow="encrypted-media"
+                                style="border-radius: 12px;">
+                            </iframe>
+                        </div>
+                    </div>
+                    <div class="mood-options">
+                        <div class="mood-card" onclick="selectMood('romantic')">
+                            <span>💝</span>
+                            <h3>Romantic Evening</h3>
+                            <p>Intimate & Elegant</p>
+                        </div>
+                        <div class="mood-card" onclick="selectMood('adventurous')">
+                            <span>🌟</span>
+                            <h3>Adventure Date</h3>
+                            <p>Exciting & Fun</p>
+                        </div>
+                        <div class="mood-card" onclick="selectMood('cozy')">
+                            <span>🏡</span>
+                            <h3>Cozy Night In</h3>
+                            <p>Relaxed & Intimate</p>
+                        </div>
+                    </div>
+
+                    <!-- Add this div for mood content -->
+                    <div id="mood-content" class="mood-content"></div>
+                </div>
+            </div>
+
+            <!-- Dining Section -->
+            <div id="dining" class="tab-content">
+                <div class="dining-options">
+                    <div class="option-card">
+                        <h3>Find a Restaurant</h3>
+                        <div class="cuisine-picker">
+            <div class="slot-machine">
+                <div id="slot-spinner" class="slot-spinner">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+            <div class="food-buttons">
+                <button onclick="pickRandomFood()" id="spinButton">Spin for Food!</button>
+                <button onclick="searchNearbyFood()" class="maps-btn" disabled id="mapsButton">
+                    Find Nearby Restaurants
+                </button>
+                <button onclick="searchRecipes()" class="recipe-btn" disabled id="recipeButton">
+                    Find Recipes
+                </button>
+            </div>
+                        </div>
+        </div>
+                    <div class="option-card">
+                        <h3>Cook Together</h3>
+                        <div class="recipe-finder">
+            <div id="recipe-card" class="recipe-card">
+                <button onclick="pickRandomRecipe()" class="recipe-btn">
+                    Get Random Recipe
+                </button>
+                                <div id="recipe-result"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Activities Section -->
+            <div id="activities" class="tab-content">
+                <div class="activity-generator">
+                    <h2>Date Ideas Generator</h2>
+                    <div class="activity-cards">
+            <div class="activity-card">
+                            <div id="activity-result" class="activity-result"></div>
+                            <button onclick="suggestActivity()" class="generate-btn">
+                                Generate New Activity
+                </button>
+                        </div>
+                </div>
+            </div>
+        </div>
+
+            <!-- Entertainment Section -->
+            <div id="entertainment" class="tab-content">
+                <div class="entertainment-options">
+                    <div class="movies-section">
+                        <h2>Now Showing in South Africa</h2>
+                        <div id="movies-grid" class="movies-grid">
+                            <!-- Movies will be loaded here -->
+                        </div>
+                        <div class="cinema-links">
+                            <a href="https://www.numetro.co.za" target="_blank" class="cinema-btn numetro">
+                                Now Showing at Nu Metro
+                            </a>
+                            <a href="https://www.sterkinekor.com" target="_blank" class="cinema-btn sterkinekor">
+                                Now Showing at Ster Kinekor
+                            </a>
+                        </div>
+                    </div>
+                    <div class="games-section">
+                        <div class="game-content">
+                            <h3>Couple's Games</h3>
+                            <div class="games-grid">
+                                <div class="game-card">
+                                    <h4>Truth or Dare</h4>
+                                    <p>Share intimate moments and fun challenges</p>
+                                    <button onclick="startGame('truth-or-dare')">Play</button>
+                                </div>
+                                <div class="game-card">
+                                    <h4>Would You Rather</h4>
+                                    <p>Make fun choices together</p>
+                                    <button onclick="startGame('would-you-rather')">Play</button>
+                                </div>
+                                <div class="game-card">
+                                    <h4>20 Questions</h4>
+                                    <p>Test how well you know each other</p>
+                                    <button onclick="startGame('twenty-questions')">Play</button>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memories Section -->
+            <div id="memories" class="tab-content">
+                <div class="memories-container">
+                    <h2>Date Night Memories</h2>
+                    <div class="memories-actions">
+                        <button onclick="showMemoryForm()" class="create-memory-btn">
+                            Create New Memory 📸
+                        </button>
+                        <button onclick="viewMemories()" class="view-memories-btn">
+                            View All Memories 💝
+                        </button>
+        </div>
+                    <div id="memories-content"></div>
+            </div>
+            </div>
+
+            <!-- Love Languages Section -->
+            <div id="love-languages" class="tab-content">
+                <div class="love-languages-quiz">
+                    <h2>Discover Your Love Languages</h2>
+                    <p class="quiz-intro">Understanding how you and your partner express and receive love can strengthen your relationship.</p>
+                    
+                    <div class="quiz-container">
+                        <div class="quiz-progress">
+                            <div class="progress-bar-container">
+                                <div id="progress-bar"></div>
+                            </div>
+                            <span>Question <span id="current-question">1</span>/<span id="total-questions">20</span></span>
+                        </div>
+                        
+                        <div id="question-container" style="display: none;">
+                            <p id="question-text"></p>
+                            <div class="options-container"></div>
+                        </div>
+                        
+                        <button id="start-quiz" onclick="startLoveLanguagesQuiz()">
+                            <span>Start Love Language Quiz</span>
+                            <span class="button-description">Discover how you express and receive love</span>
+                        </button>
+                        
+                        <div id="results-container" style="display: none;">
+                            <h3>Your Love Language Profile</h3>
+                            <div class="results-chart">
+                                <div class="chart-bar" id="words-of-affirmation-bar">
+                                    <label>Words of Affirmation</label>
+                                    <div class="bar-container">
+                                        <div class="bar"></div>
+                                        <span class="percentage">0%</span>
+                                    </div>
+                                </div>
+                                <div class="chart-bar" id="acts-of-service-bar">
+                                    <label>Acts of Service</label>
+                                    <div class="bar-container">
+                                        <div class="bar"></div>
+                                        <span class="percentage">0%</span>
+                                    </div>
+                                </div>
+                                <div class="chart-bar" id="receiving-gifts-bar">
+                                    <label>Receiving Gifts</label>
+                                    <div class="bar-container">
+                                        <div class="bar"></div>
+                                        <span class="percentage">0%</span>
+                                    </div>
+                                </div>
+                                <div class="chart-bar" id="quality-time-bar">
+                                    <label>Quality Time</label>
+                                    <div class="bar-container">
+                                        <div class="bar"></div>
+                                        <span class="percentage">0%</span>
+                                    </div>
+                                </div>
+                                <div class="chart-bar" id="physical-touch-bar">
+                                    <label>Physical Touch</label>
+                                    <div class="bar-container">
+                                        <div class="bar"></div>
+                                        <span class="percentage">0%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="interpretation" class="interpretation"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Challenges Section -->
+            <div id="challenges" class="tab-content">
+                <div class="challenges-section">
+                    <h2>Date Night Challenges</h2>
+                    <p class="section-description">Get random romantic challenges to make your date night extra special!</p>
+                    
+                    <div class="challenge-container">
+                        <button onclick="showChallenge()" class="generate-challenge-btn">
+                            Get a Challenge
+                        </button>
+                        <div id="challenge-result" class="challenge-result"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Date Night Timer -->
+        <div class="date-timer">
+            <!-- Enhanced countdown timer -->
+        </div>
+
+        <!-- Add this inside your page-container div, perhaps near the top -->
+        <div class="date-countdown">
+            <h2>Countdown to Date Night</h2>
+            <div class="date-picker">
+                <input type="datetime-local" id="dateTime" onchange="startCountdown()">
+                <button onclick="startCountdown()" class="set-date-btn">Set Date Night</button>
+            </div>
+            <div class="countdown-display">
+                <div class="time-block">
+                    <span id="days">00</span>
+                    <label>Days</label>
+                </div>
+                <div class="time-separator">:</div>
+                <div class="time-block">
+                    <span id="hours">00</span>
+                    <label>Hours</label>
+                </div>
+                <div class="time-separator">:</div>
+                <div class="time-block">
+                    <span id="minutes">00</span>
+                    <label>Minutes</label>
+                </div>
+                <div class="time-separator">:</div>
+                <div class="time-block">
+                    <span id="seconds">00</span>
+                    <label>Seconds</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
