@@ -1,3 +1,8 @@
+// Add this near the top of your script.js
+(function() {
+    emailjs.init("YOUR_PUBLIC_KEY"); // Get this from EmailJS dashboard
+})();
+
 const foodTypes = [
     "Italian",
     "Chinese",
@@ -1583,6 +1588,11 @@ function showTab(tabName) {
         } else {
             viewMemories();
         }
+    }
+    
+    // If switching to date planner tab, set up the listeners
+    if (tabName === 'date-planner') {
+        setupDatePlanner();
     }
 }
 
@@ -3786,3 +3796,369 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// Add these functions for memory handling
+function saveMemory() {
+    const titleInput = document.getElementById('memory-title');
+    const memoryInput = document.getElementById('memory-input');
+    const dateInput = document.getElementById('memory-date');
+    const photoInput = document.getElementById('memory-photo');
+    
+    const title = titleInput.value.trim();
+    const memoryText = memoryInput.value.trim();
+    const memoryDate = dateInput.value;
+    
+    if (!title || !memoryText || !memoryDate) {
+        alert('Please enter a title, memory, and date!');
+        return;
+    }
+
+    // Handle photo
+    const file = photoInput.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            saveMemoryWithPhoto(title, memoryText, memoryDate, e.target.result);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        saveMemoryWithPhoto(title, memoryText, memoryDate, null);
+    }
+}
+
+function saveMemoryWithPhoto(title, memoryText, memoryDate, photoData) {
+    // Get existing memories or initialize new array
+    let memories = JSON.parse(localStorage.getItem('dateNightMemories') || '[]');
+    
+    // Add new memory
+    memories.push({
+        title: title,
+        text: memoryText,
+        date: memoryDate,
+        photo: photoData,
+        timestamp: new Date().getTime()
+    });
+    
+    // Save back to localStorage
+    localStorage.setItem('dateNightMemories', JSON.stringify(memories));
+    
+    // Clear inputs
+    document.getElementById('memory-title').value = '';
+    document.getElementById('memory-input').value = '';
+    document.getElementById('memory-date').value = '';
+    document.getElementById('memory-photo').value = '';
+    document.getElementById('photo-preview').style.display = 'none';
+    
+    // Refresh display
+    displayMemories();
+    
+    // Show confirmation
+    alert('Memory saved successfully! 💝');
+}
+
+function displayMemories() {
+    const memoriesContainer = document.getElementById('memories-list');
+    const memories = JSON.parse(localStorage.getItem('dateNightMemories') || '[]');
+    
+    if (memories.length === 0) {
+        memoriesContainer.innerHTML = '<p class="no-memories">No memories saved yet. Create some magical moments! ✨</p>';
+        return;
+    }
+    
+    // Sort memories by date
+    memories.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    memoriesContainer.innerHTML = memories.map(memory => `
+        <div class="memory-card ${memory.photo ? 'has-photo' : ''}">
+            ${memory.photo ? `
+                <div class="memory-photo-container">
+                    <img src="${memory.photo}" alt="${memory.title}" class="memory-photo">
+                </div>
+            ` : ''}
+            <div class="memory-content">
+                <div class="memory-title">${memory.title}</div>
+                <div class="memory-date">${new Date(memory.date).toLocaleDateString()}</div>
+                <div class="memory-text">${memory.text}</div>
+                <button onclick="deleteMemory(${memory.timestamp})" class="delete-btn">Delete</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Add photo preview functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const photoInput = document.getElementById('memory-photo');
+    const photoPreview = document.getElementById('photo-preview');
+    
+    photoInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                photoPreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                photoPreview.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+});
+
+// Add these back right after the displayMemories function
+function deleteMemory(timestamp) {
+    if (!confirm('Are you sure you want to delete this memory?')) return;
+    
+    let memories = JSON.parse(localStorage.getItem('dateNightMemories') || '[]');
+    memories = memories.filter(memory => memory.timestamp !== timestamp);
+    localStorage.setItem('dateNightMemories', JSON.stringify(memories));
+    displayMemories();
+}
+
+// Update the DOMContentLoaded event listener to include both photo preview and memory functionality
+document.addEventListener('DOMContentLoaded', function() {
+    displayMemories();
+    
+    // Add event listener for save button if it exists
+    const saveButton = document.getElementById('save-memory-btn');
+    if (saveButton) {
+        saveButton.addEventListener('click', saveMemory);
+    }
+    
+    // Photo preview functionality
+    const photoInput = document.getElementById('memory-photo');
+    const photoPreview = document.getElementById('photo-preview');
+    
+    if (photoInput && photoPreview) {
+        photoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    photoPreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                    photoPreview.style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+});
+
+// Add these functions for the date planner
+function generateCalendarLinks(eventData) {
+    // Format dates for calendar links
+    const startDate = new Date(eventData.start);
+    const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000)); // 2 hours later
+    
+    // Format dates for Google Calendar
+    const googleStart = startDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    const googleEnd = endDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    
+    // Create description with both emails
+    const description = `
+Date Night Plan!
+${eventData.description}
+
+Attendees:
+- ${eventData.yourEmail}
+- ${eventData.partnerEmail}
+    `.trim();
+
+    return {
+        google: `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventData.title)}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(eventData.location)}&dates=${googleStart}/${googleEnd}`,
+        whatsapp: `https://wa.me/?text=${encodeURIComponent(`🗓️ Date Night Plan!\n\n📌 ${eventData.title}\n📅 ${formatDateTime(eventData.start)}\n📍 ${eventData.location}\n\n✨ Activities:\n${eventData.description}\n\nAttendees:\n- ${eventData.yourEmail}\n- ${eventData.partnerEmail}`)}`,
+        ics: `data:text/calendar;charset=utf8,BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+DTSTART:${googleStart}
+DTEND:${googleEnd}
+SUMMARY:${eventData.title}
+DESCRIPTION:${description}
+LOCATION:${eventData.location}
+END:VEVENT
+END:VCALENDAR`.replace(/\n/g, '%0A')
+    };
+}
+
+function showSharingDialog(dateData) {
+    const dialog = document.createElement('div');
+    dialog.className = 'sharing-dialog';
+    dialog.innerHTML = `
+        <div class="sharing-content">
+            <h3>Date Planned Successfully! 💝</h3>
+            <p>Share with your partner:</p>
+            <div class="sharing-buttons">
+                <a href="${dateData.links.google}" target="_blank" class="share-btn google">
+                    <span>Add to Google Calendar</span>
+                </a>
+                <a href="${dateData.links.ics}" class="share-btn outlook" download="date-night.ics">
+                    <span>Download Calendar File (.ics)</span>
+                </a>
+                <a href="${dateData.links.whatsapp}" target="_blank" class="share-btn whatsapp">
+                    <span>Share via WhatsApp</span>
+                </a>
+                <button onclick="copyCalendarLink('${dateData.links.google}')" class="share-btn copy">
+                    <span>Copy Calendar Link</span>
+                </button>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" class="close-btn">Close</button>
+        </div>
+    `;
+    document.body.appendChild(dialog);
+}
+
+function sendDateInvite() {
+    console.log('Sending date invite...'); // Debug log
+    
+    const dateTitle = document.getElementById('date-title').value.trim();
+    const dateTime = document.getElementById('date-time').value;
+    const location = document.getElementById('date-location').value.trim();
+    const activities = document.getElementById('date-activities').value.trim();
+    const yourEmail = document.getElementById('your-email').value.trim();
+    const partnerEmail = document.getElementById('partner-email').value.trim();
+    
+    if (!dateTitle || !dateTime || !location || !activities) {
+        alert('Please fill in all required fields!');
+        return;
+    }
+    
+    try {
+        // Create date data
+        const dateData = {
+            title: dateTitle,
+            dateTime: dateTime,
+            location: location,
+            activities: activities,
+            yourEmail: yourEmail,
+            partnerEmail: partnerEmail,
+            id: Date.now()
+        };
+        
+        // Generate sharing links
+        const links = generateCalendarLinks({
+            title: dateTitle,
+            description: activities,
+            location: location,
+            start: dateTime,
+            yourEmail: yourEmail,
+            partnerEmail: partnerEmail
+        });
+        
+        // Save links with date data
+        dateData.links = links;
+        
+        // Save to localStorage
+        savePlannedDate(dateData);
+        
+        // Show sharing options dialog
+        showSharingDialog(dateData);
+        
+        clearPlannerForm();
+        displayUpcomingDates();
+        
+    } catch (error) {
+        console.error('Error creating date:', error);
+        alert('There was an error creating the date. Please try again.');
+    }
+}
+
+// Make sure these helper functions are present
+function formatDateTime(dateTime) {
+    return new Date(dateTime).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric'
+    });
+}
+
+function savePlannedDate(dateData) {
+    let plannedDates = JSON.parse(localStorage.getItem('plannedDates') || '[]');
+    plannedDates.push(dateData);
+    localStorage.setItem('plannedDates', JSON.stringify(plannedDates));
+}
+
+function clearPlannerForm() {
+    document.getElementById('date-title').value = '';
+    document.getElementById('date-time').value = '';
+    document.getElementById('date-location').value = '';
+    document.getElementById('date-activities').value = '';
+    document.getElementById('your-email').value = '';
+    document.getElementById('partner-email').value = '';
+}
+
+function displayUpcomingDates() {
+    const container = document.getElementById('upcoming-dates');
+    const plannedDates = JSON.parse(localStorage.getItem('plannedDates') || '[]')
+        .filter(date => new Date(date.dateTime) > new Date())
+        .sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+    
+    if (plannedDates.length === 0) {
+        container.innerHTML = '<p class="no-dates">No upcoming dates planned yet! 🗓️</p>';
+        return;
+    }
+    
+    container.innerHTML = plannedDates.map(date => `
+        <div class="date-card">
+            <h4>${date.title}</h4>
+            <div class="date-details">
+                <div class="date-detail">
+                    <span class="date-detail-icon">🗓️</span>
+                    <span>${formatDateTime(date.dateTime)}</span>
+                </div>
+                <div class="date-detail">
+                    <span class="date-detail-icon">📍</span>
+                    <span>${date.location}</span>
+                </div>
+                <div class="date-detail">
+                    <span class="date-detail-icon">✨</span>
+                    <span>${date.activities}</span>
+                </div>
+                ${date.partnerEmail ? `
+                    <div class="date-detail">
+                        <span class="date-detail-icon">📧</span>
+                        <span>Partner: ${date.partnerEmail}</span>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="date-actions">
+                ${date.links ? `
+                    <button onclick='showSharingDialog(${JSON.stringify(date).replace(/'/g, "&#39;")})' class="share-again-btn">
+                        Share Again 📤
+                    </button>
+                ` : ''}
+                <button onclick="deletePlannedDate(${date.id})" class="delete-btn">
+                    Cancel Date
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Add this function to set up event listeners
+function setupDatePlanner() {
+    const sendInviteBtn = document.getElementById('send-invite');
+    if (sendInviteBtn) {
+        sendInviteBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            sendDateInvite();
+        });
+    }
+}
+
+// Also add this to your DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', function() {
+    // ... your existing code ...
+    
+    // Set up date planner if we start on that tab
+    if (document.querySelector('#date-planner').classList.contains('active')) {
+        setupDatePlanner();
+    }
+});
+
+// Add this helper function that was missing
+function copyCalendarLink(link) {
+    navigator.clipboard.writeText(link)
+        .then(() => alert('Calendar link copied to clipboard! 📋'))
+        .catch(err => console.error('Failed to copy link:', err));
+}

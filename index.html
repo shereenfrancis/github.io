@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Perfect Date Night</title>
@@ -34,6 +35,7 @@
                 <button class="tab-btn" onclick="showTab('memories')">Memories</button>
                 <button class="tab-btn" onclick="showTab('love-languages')">Love Languages</button>
                 <button class="tab-btn" onclick="showTab('challenges')">Challenges</button>
+                <button class="tab-btn" onclick="showTab('date-planner')">Date Planner</button>
             </div>
 
             <!-- Mood Section -->
@@ -266,18 +268,26 @@
 
             <!-- Memories Section -->
             <div id="memories" class="tab-content">
-                <div class="memories-container">
-                    <h2>Date Night Memories</h2>
-                    <div class="memories-actions">
-                        <button onclick="showMemoryForm()" class="create-memory-btn">
-                            Create New Memory 📸
-                        </button>
-                        <button onclick="viewMemories()" class="view-memories-btn">
-                            View All Memories 💝
-                        </button>
-        </div>
-                    <div id="memories-content"></div>
-            </div>
+                <div class="memories-section">
+                    <h2>Our Special Memories</h2>
+                    <div class="memory-input-container">
+                        <input type="text" id="memory-title" class="memory-title-input" placeholder="Give your date a title...">
+                        <input type="date" id="memory-date" class="memory-date-input">
+                        <div class="photo-upload-container">
+                            <label for="memory-photo" class="photo-upload-label">
+                                <span class="upload-icon">📸</span>
+                                <span>Add Photo</span>
+                            </label>
+                            <input type="file" id="memory-photo" accept="image/*" class="memory-photo-input">
+                            <div id="photo-preview" class="photo-preview"></div>
+                        </div>
+                        <textarea id="memory-input" placeholder="Write your special memory here..." class="memory-text-input"></textarea>
+                        <button id="save-memory-btn" class="save-memory-btn">Save Memory 💝</button>
+                    </div>
+                    <div id="memories-list" class="memories-list">
+                        <!-- Memories will be displayed here -->
+                    </div>
+                </div>
             </div>
 
             <!-- Love Languages Section -->
@@ -297,8 +307,8 @@
                         <div id="question-container" style="display: none;">
                             <p id="question-text"></p>
                             <div class="options-container"></div>
-                        </div>
-                        
+        </div>
+
                         <button id="start-quiz" onclick="startLoveLanguagesQuiz()">
                             <span>Start Love Language Quiz</span>
                             <span class="button-description">Discover how you express and receive love</span>
@@ -360,6 +370,51 @@
                             Get a Challenge
                         </button>
                         <div id="challenge-result" class="challenge-result"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Date Planner Section -->
+            <div id="date-planner" class="tab-content">
+                <div class="planner-section">
+                    <h2>Plan Your Perfect Date</h2>
+                    <div class="planner-form">
+                        <div class="form-group">
+                            <label>Date Title</label>
+                            <input type="text" id="date-title" placeholder="Give your date a special name..." class="planner-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Date & Time</label>
+                            <input type="datetime-local" id="date-time" class="planner-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Location</label>
+                            <input type="text" id="date-location" placeholder="Where will you meet?" class="planner-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Activities Planned</label>
+                            <textarea id="date-activities" placeholder="What will you do together?" class="planner-textarea"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Your Email</label>
+                            <input type="email" id="your-email" placeholder="Your email address" class="planner-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Partner's Email</label>
+                            <input type="email" id="partner-email" placeholder="Your partner's email address" class="planner-input">
+                        </div>
+                        
+                        <button id="send-invite" class="send-invite-btn">Create Date & Get Calendar Link 📅</button>
+                    </div>
+                    
+                    <div id="upcoming-dates" class="upcoming-dates">
+                        <h3>Upcoming Dates</h3>
+                        <!-- Planned dates will appear here -->
                     </div>
                 </div>
             </div>
