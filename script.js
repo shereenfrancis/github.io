@@ -149,12 +149,22 @@ function pickRandomFood() {
     }, 500);
 }
 
+function createGoogleMapsUrl(searchQuery, coords) {
+    if (coords) {
+        // Search for restaurants near the user's location
+        return `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}/@${coords.latitude},${coords.longitude},14z`;
+    } else {
+        // Fallback to just searching for restaurants
+        return `https://www.google.com/maps/search/${encodeURIComponent(searchQuery)}`;
+    }
+}
+
 async function searchNearbyFood() {
     if (!currentFoodSelection) return;
     
     try {
         const coords = await getUserLocation();
-        const searchQuery = `${currentFoodSelection} restaurants`;
+        const searchQuery = `${currentFoodSelection} restaurants near me`;
         const mapsUrl = createGoogleMapsUrl(searchQuery, coords);
         window.open(mapsUrl, '_blank');
     } catch (error) {
@@ -446,16 +456,6 @@ async function getUserLocation() {
     });
 }
 
-function createGoogleMapsUrl(searchQuery, coords) {
-    if (coords) {
-        // If we have coordinates, search near the user's location
-        return `https://www.google.com/maps/search/?api=1&query=${coords.latitude},${coords.longitude}`;
-    } else {
-        // Fallback to just searching in South Africa
-        return `https://www.google.com/maps/search/?api=1&query=-25.7617,28.1952`;
-    }
-}
-
 // Add this function to handle the Maps button click
 async function openGoogleMaps(event, searchQuery) {
     event.preventDefault();
@@ -470,15 +470,43 @@ async function openGoogleMaps(event, searchQuery) {
     }
 }
 
-function searchRecipes() {
+async function searchRecipes() {
     if (!currentFoodSelection) return;
     
-    // Create search query for https://allrecipes.com
-    const searchQuery = `${currentFoodSelection} recipes`;
-    const recipeUrl = `https://allrecipes.com/search/results/?search=${encodeURIComponent(searchQuery)}`;
+    // Create a search query that includes the cuisine type
+    const searchQuery = encodeURIComponent(`${currentFoodSelection} recipes`);
     
-    // Open in new tab
-    window.open(recipeUrl, '_blank');
+    // Open a new tab with recipe search results
+    const urls = [
+        `https://www.allrecipes.com/search?q=${searchQuery}`,
+        `https://www.foodnetwork.com/search/${searchQuery}-`,
+        `https://tasty.co/search?q=${searchQuery}`,
+        `https://www.epicurious.com/search/${searchQuery}`
+    ];
+    
+    // Open the first URL and store others as backup options
+    window.open(urls[0], '_blank');
+    
+    // Create a dropdown with other recipe sites
+    const recipeDropdown = document.createElement('div');
+    recipeDropdown.className = 'recipe-dropdown';
+    recipeDropdown.innerHTML = `
+        <h4>More Recipe Sites:</h4>
+        <ul>
+            ${urls.slice(1).map(url => `
+                <li><a href="${url}" target="_blank">Find on ${new URL(url).hostname.split('.')[1]}</a></li>
+            `).join('')}
+        </ul>
+    `;
+    
+    // Add the dropdown near the recipe button
+    const recipeButton = document.getElementById('recipeButton');
+    recipeButton.parentNode.appendChild(recipeDropdown);
+    
+    // Remove the dropdown after 5 seconds
+    setTimeout(() => {
+        recipeDropdown.remove();
+    }, 5000);
 }
 
 // Update the recipe picker function
@@ -3264,4 +3292,497 @@ function showSubChallenge(mainChallenge) {
     
     // Add animation
     createHeartExplosion(window.innerWidth / 2, window.innerHeight / 2);
+} 
+
+// Add these functions to your existing script.js
+function buildDrinkURL(drinkSearchValue) {
+    return fetch(`https://www.thecocktaildb.com/api/json/v1/1/filter.php?i=${drinkSearchValue}`)
+        .then(response => response.json())
+        .then(response => {
+            const drinkLength = response.drinks.length;
+            const randomNumber = Math.floor(Math.random() * drinkLength);
+            const drinkID = response.drinks[randomNumber].idDrink;
+            
+            return fetch(`https://www.thecocktaildb.com/api/json/v1/1/lookup.php?i=${drinkID}`)
+                .then(response => response.json());
+        });
 }
+
+function buildMealURL(mealSearchValue) {
+    return fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${mealSearchValue}`)
+        .then(response => response.json())
+        .then(response => {
+            const foodArrayLength = response.meals.length;
+            const mathRandomNumber = Math.floor(Math.random() * foodArrayLength);
+            const foodID = response.meals[mathRandomNumber].idMeal;
+            
+            return fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${foodID}`)
+                .then(response => response.json());
+        });
+}
+
+function displayDrinkAndMeal(drink, meal) {
+    const diningContent = document.querySelector('.dining-options');
+    diningContent.innerHTML = `
+        <div class="recipe-results">
+            <div class="recipe-card drink-card">
+                <img src="${drink.strDrinkThumb}" alt="${drink.strDrink}">
+                <h3>${drink.strDrink}</h3>
+                <div class="recipe-details">
+                    <h4>Ingredients:</h4>
+                    <ul>
+                        ${getIngredientsList(drink)}
+                    </ul>
+                    <h4>Instructions:</h4>
+                    <p>${drink.strInstructions}</p>
+                </div>
+            </div>
+            
+            <div class="recipe-card meal-card">
+                <img src="${meal.strMealThumb}" alt="${meal.strMeal}">
+                <h3>${meal.strMeal}</h3>
+                <div class="recipe-details">
+                    <h4>Ingredients:</h4>
+                    <ul>
+                        ${getIngredientsList(meal)}
+                    </ul>
+                    <h4>Instructions:</h4>
+                    <p>${meal.strInstructions}</p>
+                    ${meal.strSource ? `<a href="${meal.strSource}" target="_blank" class="recipe-link">View Full Recipe</a>` : ''}
+                </div>
+            </div>
+        </div>
+        <button onclick="showDiningSelectors()" class="try-again-btn">Try Different Cuisine</button>
+    `;
+}
+
+function getIngredientsList(recipe) {
+    let ingredients = '';
+    for (let i = 1; i <= 20; i++) {
+        const ingredient = recipe[`strIngredient${i}`];
+        const measure = recipe[`strMeasure${i}`];
+        if (ingredient && ingredient.trim()) {
+            ingredients += `<li>${measure ? measure + ' ' : ''}${ingredient}</li>`;
+        }
+    }
+    return ingredients;
+}
+
+function showDiningSelectors() {
+    const diningContent = document.querySelector('.dining-options');
+    diningContent.innerHTML = `
+        <div class="selectors-container">
+            <div class="cuisine-selector">
+                <h3>Choose Your Cuisine</h3>
+                <select id="meal-searched" class="romantic-select">
+                    <option value="Random">Random</option>
+                    <option value="American">American</option>
+                    <option value="Chinese">Chinese</option>
+                    <option value="French">French</option>
+                    <option value="Indian">Indian</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Mexican">Mexican</option>
+                    <option value="Thai">Thai</option>
+                </select>
+            </div>
+            
+            <div class="drink-selector">
+                <h3>Choose Your Drink</h3>
+                <select id="drink-selected" class="romantic-select">
+                    <option value="Random">Random</option>
+                    <option value="gin">Gin</option>
+                    <option value="vodka">Vodka</option>
+                    <option value="rum">Rum</option>
+                    <option value="tequila">Tequila</option>
+                    <option value="whiskey">Whiskey</option>
+                </select>
+            </div>
+            
+            <button onclick="generateMealAndDrink()" class="generate-btn">
+                Create Your Perfect Pairing
+            </button>
+        </div>
+    `;
+}
+
+function generateMealAndDrink() {
+    const mealSelect = document.getElementById('meal-searched');
+    const drinkSelect = document.getElementById('drink-selected');
+    
+    let mealValue = mealSelect.value;
+    let drinkValue = drinkSelect.value;
+    
+    if (mealValue === 'Random') {
+        const cuisines = ['American', 'Chinese', 'French', 'Indian', 'Italian', 'Japanese', 'Mexican', 'Thai'];
+        mealValue = cuisines[Math.floor(Math.random() * cuisines.length)];
+    }
+    
+    if (drinkValue === 'Random') {
+        const drinks = ['gin', 'vodka', 'rum', 'tequila', 'whiskey'];
+        drinkValue = drinks[Math.floor(Math.random() * drinks.length)];
+    }
+    
+    Promise.all([
+        buildDrinkURL(drinkValue),
+        buildMealURL(mealValue)
+    ])
+    .then(([drinkResponse, mealResponse]) => {
+        displayDrinkAndMeal(drinkResponse.drinks[0], mealResponse.meals[0]);
+        createHeartExplosion(window.innerWidth / 2, window.innerHeight / 2);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+// Add these functions to your script.js
+async function getRecommendation() {
+    const genreSelect = document.getElementById('genre-select');
+    const yearRange = document.getElementById('year-range');
+    const selectedGenre = genreSelect.value;
+    const contentType = document.querySelector('.type-btn.active').dataset.type;
+    const result = document.getElementById('recommendation-result');
+    
+    if (contentType === 'tv') {
+        // Use OMDB API for TV series
+        try {
+            // Get genre name instead of ID for OMDB
+            const genreName = genreSelect.options[genreSelect.selectedIndex].text;
+            
+            // Map TMDB genres to more general search terms for OMDB
+            const searchTerms = {
+                'Romance': ['romantic series', 'romance drama', 'love story series', 'romantic comedy series'],
+                'Comedy': ['comedy series', 'sitcom', 'popular sitcom', 'hit comedy series'],
+                'Drama': ['drama series', 'hit drama series', 'award winning drama', 'popular drama'],
+                'Horror': ['horror series', 'supernatural series', 'thriller series', 'horror drama'],
+                'Action': ['action series', 'action drama', 'thriller series', 'hit action series'],
+                'Adventure': ['adventure series', 'epic series', 'fantasy adventure', 'hit adventure series'],
+                'Animation': ['animated series', 'popular cartoon', 'hit animated series', 'adult animation'],
+                'Crime': ['crime series', 'detective series', 'police drama', 'hit crime series'],
+                'Documentary': ['documentary series', 'popular documentary', 'hit documentary series'],
+                'Fantasy': ['fantasy series', 'supernatural series', 'hit fantasy series'],
+                'History': ['historical drama', 'period series', 'history series', 'hit historical series'],
+                'Mystery': ['mystery series', 'detective series', 'thriller series', 'hit mystery series'],
+                'Science Fiction': ['sci-fi series', 'science fiction series', 'hit sci-fi series'],
+                'Thriller': ['thriller series', 'suspense series', 'hit thriller series']
+            };
+
+            // Add popular series fallbacks
+            const popularSeriesTerms = [
+                'breaking bad',
+                'game of thrones',
+                'stranger things',
+                'the crown',
+                'friends',
+                'the office',
+                'black mirror',
+                'westworld',
+                'the mandalorian',
+                'chernobyl',
+                'true detective',
+                'the wire',
+                'fargo',
+                'better call saul',
+                'the sopranos',
+                'band of brothers',
+                'the witcher',
+                'bridgerton',
+                'succession',
+                'ted lasso'
+            ];
+
+            // Handle "Surprise Me" option with year consideration
+            let searchTerm;
+            let yearFilter = '';
+            
+            if (yearRange.value !== 'all') {
+                if (yearRange.value === 'classic') {
+                    yearFilter = '&y=1900-1980';
+                } else {
+                    const [startYear, endYear] = yearRange.value.split(',');
+                    yearFilter = `&y=${startYear}`;  // Use start year as anchor point
+                }
+            }
+
+            if (genreName === 'Surprise Me! 🎲') {
+                // Try popular series first
+                const randomPopular = popularSeriesTerms[Math.floor(Math.random() * popularSeriesTerms.length)];
+                const popularResponse = await fetch(
+                    `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${randomPopular}&type=series`
+                );
+                const popularData = await popularResponse.json();
+                
+                if (popularData.Response === "True") {
+                    searchTerm = randomPopular;
+                } else {
+                    // Fallback to genre search
+                    const genres = Object.keys(searchTerms);
+                    const randomGenre = genres[Math.floor(Math.random() * genres.length)];
+                    const searchOptions = searchTerms[randomGenre];
+                    searchTerm = searchOptions[Math.floor(Math.random() * searchOptions.length)];
+                }
+            } else {
+                // Use genre-specific search with popular shows bias
+                const searchOptions = searchTerms[genreName] || [genreName.toLowerCase()];
+                let foundResults = false;
+                
+                // Try each search term
+                for (const term of searchOptions) {
+                    const testResponse = await fetch(
+                        `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&type=series&s=${term}${yearFilter}`
+                    );
+                    const testData = await testResponse.json();
+                    
+                    if (testData.Response === "True" && testData.Search) {
+                        // Filter and sort by popularity (using imdbRating as proxy)
+                        const qualityResults = [];
+                        for (const show of testData.Search) {
+                            const detailsResponse = await fetch(
+                                `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&i=${show.imdbID}`
+                            );
+                            const details = await detailsResponse.json();
+                            if (details.imdbRating && details.imdbRating >= 7) {
+                                qualityResults.push({...show, rating: parseFloat(details.imdbRating)});
+                            }
+                        }
+                        
+                        if (qualityResults.length > 0) {
+                            // Sort by rating
+                            qualityResults.sort((a, b) => b.rating - a.rating);
+                            searchTerm = term;
+                            foundResults = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!foundResults) {
+                    // Fallback to popular shows in that genre
+                    searchTerm = `popular ${searchOptions[0]}`;
+                }
+            }
+
+            // Add quality filters to the main search
+            const searchResponse = await fetch(
+                `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&type=series&s=${searchTerm}${yearFilter}`
+            );
+            const searchData = await searchResponse.json();
+
+            if (searchData.Response === "True" && searchData.Search) {
+                // Filter out low-quality results
+                const qualityResults = searchData.Search.filter(show => 
+                    show.Poster !== "N/A" && 
+                    !show.Title.toLowerCase().includes("episode")
+                );
+                
+                if (qualityResults.length > 0) {
+                    // Get random series from quality results
+                    const randomIndex = Math.floor(Math.random() * qualityResults.length);
+                    const series = qualityResults[randomIndex];
+                    
+                    // Get detailed info for the selected series
+                    const detailsResponse = await fetch(
+                        `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&i=${series.imdbID}&plot=full`
+                    );
+                    const details = await detailsResponse.json();
+                    
+                    result.innerHTML = `
+                        <div class="recommendation-card">
+                            <img src="${details.Poster}" 
+                                 alt="${details.Title}"
+                                 onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
+                            <div class="recommendation-info">
+                                <h3>${details.Title}</h3>
+                                <div class="recommendation-meta">
+                                    <span class="recommendation-rating">★ ${details.imdbRating}</span>
+                                    <span>${details.Year}</span>
+                                    <span>${details.totalSeasons} Season${details.totalSeasons > 1 ? 's' : ''}</span>
+                                </div>
+                                <p>${details.Plot}</p>
+                                <div class="genre-tags">
+                                    ${details.Genre.split(', ').map(genre => 
+                                        `<span class="genre-tag">${genre}</span>`
+                                    ).join('')}
+                                </div>
+                                <div class="cast-list">
+                                    <h4>Starring:</h4>
+                                    <p>${details.Actors}</p>
+                                </div>
+                                <div class="additional-info">
+                                    <p><strong>Created by:</strong> ${details.Writer}</p>
+                                    <p><strong>Awards:</strong> ${details.Awards}</p>
+                                    ${details.Ratings ? details.Ratings.map(rating => 
+                                        `<p><strong>${rating.Source}:</strong> ${rating.Value}</p>`
+                                    ).join('') : ''}
+                                </div>
+                                <div class="try-another">
+                                    <button onclick="getRecommendation()" class="generate-btn">
+                                        Try Another
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    result.classList.add('show');
+                    createHeartExplosion(window.innerWidth / 2, window.innerHeight / 2);
+                } else {
+                    result.innerHTML = '<p class="error-message">No quality series found for these criteria. Try different options!</p>';
+                }
+            } else {
+                result.innerHTML = '<p class="error-message">No series found for these criteria. Try different options!</p>';
+            }
+        } catch (error) {
+            console.error('Error fetching series:', error);
+            result.innerHTML = '<p class="error-message">Error getting recommendation. Please try again.</p>';
+        }
+    } else {
+        // Movies using TMDB API
+        let genreId = selectedGenre;
+        if (selectedGenre === 'random') {
+            const genres = Array.from(genreSelect.options)
+                .filter(option => option.value !== 'random')
+                .map(option => option.value);
+            genreId = genres[Math.floor(Math.random() * genres.length)];
+        }
+        
+        // Build date range filter
+        let dateFilter = '';
+        if (yearRange.value !== 'all') {
+            if (yearRange.value === 'classic') {
+                dateFilter = '&primary_release_date.lte=1980-12-31';
+            } else {
+                const [startYear, endYear] = yearRange.value.split(',');
+                dateFilter = `&primary_release_date.gte=${startYear}-01-01&primary_release_date.lte=${endYear}-12-31`;
+            }
+        }
+        
+        try {
+            // First get total pages for this genre
+            const initialResponse = await fetch(
+                `${BASE_URL}/discover/movie?api_key=${API_KEY}&` +
+                `with_genres=${genreId}&` +
+                `vote_count.gte=100&` +
+                `sort_by=popularity.desc&` +
+                dateFilter +
+                `language=en-US&` +
+                `include_adult=false`
+            );
+            
+            const initialData = await initialResponse.json();
+            
+            if (!initialData.total_results) {
+                result.innerHTML = '<p class="error-message">No movies found for these filters. Try different options!</p>';
+                return;
+            }
+            
+            const totalPages = Math.min(initialData.total_pages, 20);
+            const randomPage = Math.floor(Math.random() * totalPages) + 1;
+            
+            const response = await fetch(
+                `${BASE_URL}/discover/movie?api_key=${API_KEY}&` +
+                `with_genres=${genreId}&` +
+                `vote_count.gte=100&` +
+                `sort_by=popularity.desc&` +
+                dateFilter +
+                `page=${randomPage}&` +
+                `language=en-US&` +
+                `include_adult=false`
+            );
+            
+            const data = await response.json();
+            
+            if (data.results && data.results.length > 0) {
+                const validResults = data.results.filter(item => 
+                    item.poster_path && 
+                    item.overview && 
+                    item.vote_average > 0
+                );
+                
+                if (validResults.length === 0) {
+                    result.innerHTML = '<p class="error-message">No good recommendations found. Try different filters!</p>';
+                    return;
+                }
+                
+                const randomIndex = Math.floor(Math.random() * validResults.length);
+                const item = validResults[randomIndex];
+                
+                // Get additional details
+                const detailsResponse = await fetch(
+                    `${BASE_URL}/movie/${item.id}?api_key=${API_KEY}&append_to_response=credits,similar,watch/providers`
+                );
+                const details = await detailsResponse.json();
+                
+                // Get watch providers
+                const zaProviders = details['watch/providers']?.results?.ZA;
+                
+                result.innerHTML = `
+                    <div class="recommendation-card">
+                        <img src="${IMAGE_BASE_URL}${item.poster_path}" 
+                             alt="${item.title}"
+                             onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
+                        <div class="recommendation-info">
+                            <h3>${item.title}</h3>
+                            <div class="recommendation-meta">
+                                <span class="recommendation-rating">★ ${item.vote_average.toFixed(1)}</span>
+                                <span>${new Date(item.release_date).getFullYear()}</span>
+                                <span>${Math.floor(details.runtime / 60)}h ${details.runtime % 60}m</span>
+                            </div>
+                            <p>${item.overview}</p>
+                            <div class="genre-tags">
+                                ${details.genres?.map(genre => 
+                                    `<span class="genre-tag">${genre.name}</span>`
+                                ).join('')}
+                            </div>
+                            ${details.tagline ? `<p class="tagline">"${details.tagline}"</p>` : ''}
+                            ${zaProviders ? `
+                                <div class="watch-providers">
+                                    <h4>Where to Watch in South Africa:</h4>
+                                    ${zaProviders.flatrate ? `
+                                        <div class="provider-list">
+                                            <p>Stream on: ${zaProviders.flatrate.map(p => p.provider_name).join(', ')}</p>
+                                        </div>
+                                    ` : ''}
+                                    ${zaProviders.rent ? `
+                                        <div class="provider-list">
+                                            <p>Available to rent on: ${zaProviders.rent.map(p => p.provider_name).join(', ')}</p>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                            <div class="cast-list">
+                                <h4>Starring:</h4>
+                                <p>${details.credits?.cast?.slice(0, 3).map(actor => actor.name).join(', ')}</p>
+                            </div>
+                            <div class="try-another">
+                                <button onclick="getRecommendation()" class="generate-btn">
+                                    Try Another
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                result.classList.add('show');
+                createHeartExplosion(window.innerWidth / 2, window.innerHeight / 2);
+            } else {
+                result.innerHTML = '<p class="error-message">No recommendations found for this genre. Try another one!</p>';
+            }
+        } catch (error) {
+            console.error('Error fetching movie:', error);
+            result.innerHTML = '<p class="error-message">Error getting recommendation. Please try again.</p>';
+        }
+    }
+}
+
+// Add click handlers for type toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const typeButtons = document.querySelectorAll('.type-btn');
+    typeButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            typeButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+});

@@ -92,6 +92,9 @@
             <!-- Dining Section -->
             <div id="dining" class="tab-content">
                 <div class="dining-options">
+                    <h2>Create Your Perfect Dining Experience</h2>
+                    
+                    <!-- Original dining options -->
                     <div class="option-card">
                         <h3>Find a Restaurant</h3>
                         <div class="cuisine-picker">
@@ -110,16 +113,45 @@
                 </button>
             </div>
                         </div>
-        </div>
+                    </div>
+
+                    <!-- New meal and drink pairing section -->
                     <div class="option-card">
-                        <h3>Cook Together</h3>
-                        <div class="recipe-finder">
-            <div id="recipe-card" class="recipe-card">
-                <button onclick="pickRandomRecipe()" class="recipe-btn">
-                    Get Random Recipe
+                        <h3>Create a Perfect Meal & Drink Pairing</h3>
+                        <div class="selectors-container">
+                            <div class="cuisine-selector">
+                                <h3>Choose Your Cuisine</h3>
+                                <select id="meal-searched" class="romantic-select">
+                                    <option value="Random">Random</option>
+                                    <option value="American">American</option>
+                                    <option value="Chinese">Chinese</option>
+                                    <option value="French">French</option>
+                                    <option value="Indian">Indian</option>
+                                    <option value="Italian">Italian</option>
+                                    <option value="Japanese">Japanese</option>
+                                    <option value="Mexican">Mexican</option>
+                                    <option value="Thai">Thai</option>
+                                </select>
+                            </div>
+                            
+                            <div class="drink-selector">
+                                <h3>Choose Your Drink</h3>
+                                <select id="drink-selected" class="romantic-select">
+                                    <option value="Random">Random</option>
+                                    <option value="gin">Gin</option>
+                                    <option value="vodka">Vodka</option>
+                                    <option value="rum">Rum</option>
+                                    <option value="tequila">Tequila</option>
+                                    <option value="whiskey">Whiskey</option>
+                                </select>
+        </div>
+
+                            <button onclick="generateMealAndDrink()" class="generate-btn">
+                                Create Your Perfect Pairing
                 </button>
-                                <div id="recipe-result"></div>
                         </div>
+                        <div id="recipe-results" class="recipe-results">
+                            <!-- Results will be displayed here -->
                     </div>
                 </div>
             </div>
@@ -177,6 +209,56 @@
                                     <button onclick="startGame('twenty-questions')">Play</button>
                         </div>
                     </div>
+                        </div>
+                    </div>
+                    <div class="recommendation-section">
+                        <h2>Movie & Series Recommendations</h2>
+                        <div class="genre-selector">
+                            <div class="selector-container">
+                                <h3>Choose Your Genre</h3>
+                                <select id="genre-select" class="romantic-select">
+                                    <option value="random">Surprise Me! 🎲</option>
+                                    <option value="10749">Romance</option>
+                                    <option value="35">Comedy</option>
+                                    <option value="18">Drama</option>
+                                    <option value="27">Horror</option>
+                                    <option value="28">Action</option>
+                                    <option value="12">Adventure</option>
+                                    <option value="16">Animation</option>
+                                    <option value="80">Crime</option>
+                                    <option value="99">Documentary</option>
+                                    <option value="14">Fantasy</option>
+                                    <option value="36">History</option>
+                                    <option value="9648">Mystery</option>
+                                    <option value="878">Science Fiction</option>
+                                    <option value="53">Thriller</option>
+                                </select>
+                                
+                                <div class="year-filter">
+                                    <h3>Release Year</h3>
+                                    <select id="year-range" class="romantic-select">
+                                        <option value="all">All Years</option>
+                                        <option value="2020,2024">2020 - Present</option>
+                                        <option value="2015,2019">2015 - 2019</option>
+                                        <option value="2010,2014">2010 - 2014</option>
+                                        <option value="2000,2009">2000 - 2009</option>
+                                        <option value="1990,1999">1990 - 1999</option>
+                                        <option value="1980,1989">1980 - 1989</option>
+                                        <option value="classic">Classic (Pre-1980)</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="type-toggle">
+                                    <button class="type-btn active" data-type="movie">Movies</button>
+                                    <button class="type-btn" data-type="tv">TV Series</button>
+                                </div>
+                                
+                                <button onclick="getRecommendation()" class="generate-btn">
+                                    Get Recommendation
+                                </button>
+                            </div>
+                            
+                            <div id="recommendation-result" class="recommendation-result"></div>
                         </div>
                     </div>
                 </div>

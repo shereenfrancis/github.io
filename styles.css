@@ -2595,6 +2595,10 @@ h4 {
     max-width: 800px;
     margin: 0 auto;
     padding: 2rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .section-description {
@@ -2602,6 +2606,7 @@ h4 {
     color: var(--text);
     font-size: 1.1rem;
     margin-bottom: 2rem;
+    max-width: 600px;
 }
 
 .challenge-container {
@@ -2609,17 +2614,25 @@ h4 {
     flex-direction: column;
     align-items: center;
     gap: 2rem;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
 }
 
 .generate-challenge-btn {
+    font-size: 1.2rem;
+    padding: 1rem 2rem;
+    min-width: 200px;
     background: linear-gradient(45deg, #ff8896, #e63946);
     color: white;
-    padding: 1rem 2rem;
-    border-radius: 25px;
-    font-size: 1.2rem;
     border: none;
+    border-radius: 25px;
     cursor: pointer;
     transition: all 0.3s ease;
+}
+
+.challenge-result {
+    width: 100%;
 }
 
 .challenge-card {
@@ -2629,33 +2642,49 @@ h4 {
     text-align: center;
     box-shadow: 0 10px 30px rgba(230, 57, 70, 0.1);
     max-width: 500px;
-    width: 100%;
+    width: 90%;  /* Changed from 100% to 90% */
+    margin: 0 auto;  /* Added margin auto */
     animation: fadeIn 0.5s ease-out;
+    display: flex;  /* Added display flex */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;  /* Added minimum height */
 }
 
 .challenge-card h3 {
     color: var(--primary);
-    font-size: 2rem;
-    margin-bottom: 1rem;
+    font-size: 2.5rem;  /* Increased font size */
+    margin-bottom: 1.5rem;
     font-family: 'Dancing Script', cursive;
+    width: 100%;
+    text-align: center;
 }
 
 .challenge-card p {
     color: var(--text);
-    font-size: 1.1rem;
-    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    width: 100%;
 }
 
 .get-task-btn, 
 .new-challenge-btn {
     background: var(--primary);
     color: white;
-    padding: 0.8rem 1.5rem;
-    border-radius: 15px;
+    padding: 1rem 2rem;  /* Increased padding */
+    border-radius: 25px;  /* Increased border radius */
     border: none;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    margin-top: 1rem;
+}
+
+.challenge-result {
+    width: 90%;  /* Changed from 100% to 90% */
+    margin: 0 auto;  /* Added margin auto */
 }
 
 .sub-challenge {
@@ -2692,4 +2721,297 @@ h4 {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Dining Selectors Styles */
+.selectors-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(230, 57, 70, 0.1);
+}
+
+.romantic-select {
+    width: 100%;
+    padding: 1rem;
+    border: 2px solid rgba(230, 57, 70, 0.2);
+    border-radius: 15px;
+    font-size: 1.1rem;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.romantic-select:hover {
+    border-color: var(--primary);
+}
+
+.recipe-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+    margin: 2rem 0;
+}
+
+.recipe-card {
+    background: white;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(230, 57, 70, 0.1);
+    transition: transform 0.3s ease;
+}
+
+.recipe-card:hover {
+    transform: translateY(-5px);
+}
+
+.recipe-card img {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+}
+
+.recipe-card h3 {
+    padding: 1rem;
+    margin: 0;
+    color: var(--primary);
+    font-family: 'Dancing Script', cursive;
+    font-size: 1.8rem;
+}
+
+.recipe-details {
+    padding: 1.5rem;
+}
+
+.recipe-details ul {
+    list-style: none;
+    padding: 0;
+}
+
+.recipe-details li {
+    margin: 0.5rem 0;
+    color: var(--text);
+}
+
+.recipe-link {
+    display: inline-block;
+    margin-top: 1rem;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.try-again-btn {
+    display: block;
+    margin: 2rem auto;
+    padding: 1rem 2rem;
+    background: linear-gradient(45deg, #ff8896, #e63946);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.recipe-dropdown {
+    position: absolute;
+    background: white;
+    border-radius: 10px;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    animation: fadeIn 0.3s ease;
+}
+
+.recipe-dropdown h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--primary);
+}
+
+.recipe-dropdown ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.recipe-dropdown li {
+    margin: 0.5rem 0;
+}
+
+.recipe-dropdown a {
+    color: var(--text);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.recipe-dropdown a:hover {
+    color: var(--primary);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Movie & Series Recommendation Styles */
+.recommendation-section {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    margin: 2rem auto;
+    box-shadow: 0 10px 30px rgba(230, 57, 70, 0.1);
+    max-width: 800px;
+}
+
+.genre-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    align-items: center;
+}
+
+.selector-container {
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+}
+
+.type-toggle {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+.type-btn {
+    padding: 0.8rem 1.5rem;
+    border-radius: 20px;
+    background: #f0f0f0;
+    color: var(--text);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.type-btn.active {
+    background: var(--primary);
+    color: white;
+}
+
+.recommendation-result {
+    width: 100%;
+    max-width: 600px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+}
+
+.recommendation-result.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.recommendation-card {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(230, 57, 70, 0.1);
+}
+
+.recommendation-card img {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+}
+
+.recommendation-info {
+    padding: 1.5rem;
+}
+
+.recommendation-info h3 {
+    color: var(--primary);
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+    font-family: 'Dancing Script', cursive;
+}
+
+.recommendation-info p {
+    color: var(--text);
+    margin: 0.5rem 0;
+    line-height: 1.6;
+}
+
+.recommendation-meta {
+    display: flex;
+    gap: 1rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.recommendation-rating {
+    color: var(--primary);
+    font-weight: bold;
+}
+
+.try-another {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.genre-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.genre-tag {
+    background: rgba(230, 57, 70, 0.1);
+    color: var(--primary);
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+    font-size: 0.9rem;
+}
+
+.tagline {
+    font-style: italic;
+    color: #666;
+    margin: 1rem 0;
+    font-size: 1.1rem;
+}
+
+.recommendation-meta span {
+    background: rgba(230, 57, 70, 0.1);
+    padding: 0.3rem 0.8rem;
+    border-radius: 15px;
+}
+
+.watch-providers {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: rgba(230, 57, 70, 0.05);
+    border-radius: 15px;
+}
+
+.cast-list {
+    margin: 1rem 0;
+}
+
+.cast-list h4, .watch-providers h4 {
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+.provider-list {
+    font-size: 0.9rem;
+    color: var(--text);
 }
