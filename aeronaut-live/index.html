@@ -55,7 +55,7 @@ const {AIRPORTS,airportsForCity,classifyRoute,greatCirclePoints}=await import('.
 const $=id=>document.getElementById(id); const cities={'Johannesburg':[-26.204,28.047],'Cape Town':[-33.925,18.424],'Durban':[-29.859,31.021],'Pretoria':[-25.747,28.188],'Gqeberha':[-33.961,25.602],'George':[-33.964,22.462],'Bloemfontein':[-29.118,26.214],'London':[51.507,-.128],'Paris':[48.857,2.352],'Amsterdam':[52.367,4.904],'Frankfurt':[50.111,8.682],'New York':[40.713,-74.006],'Los Angeles':[34.052,-118.244],'Toronto':[43.653,-79.383],'São Paulo':[-23.551,-46.633],'Buenos Aires':[-34.604,-58.382],'Dubai':[25.205,55.271],'Nairobi':[-1.286,36.818],'Cairo':[30.044,31.236],'Lagos':[6.524,3.379],'Mumbai':[19.076,72.878],'Delhi':[28.613,77.209],'Tokyo':[35.676,139.65],'Seoul':[37.566,126.978],'Hong Kong':[22.319,114.169],'Singapore':[1.352,103.82],'Bangkok':[13.756,100.501],'Sydney':[-33.869,151.209],'Melbourne':[-37.814,144.963],'Auckland':[-36.849,174.763]};
 let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=false, source='',expiry=0;
 let globeApi=null,view3d=true,observed=[],lastSelectedPoll=0,requestRevision=0,cityRequestRevision=0,activePlace='World',regionalCenter=null;
-let currentAirports=[],activeAirport=null,airportTab='nearby',routeById=new Map(),routeRequest=0,selectionRevision=0,bulkRevision=0,airportPins=[],routeLine=null,observedMapLine=null,historicalMapLine=null,showReferenceRoute=false,historySource='session',historyStatus='',historicalPoints=[],historyRevision=0,boardRevision=0,boardDirection='arrival';
+let currentAirports=[],activeAirport=null,airportTab='nearby',routeById=new Map(),routeRequest=0,selectionRevision=0,bulkRevision=0,lastBulkLookup=0,airportPins=[],routeLine=null,observedMapLine=null,historicalMapLine=null,showReferenceRoute=false,historySource='session',historyStatus='',historicalPoints=[],historyRevision=0,boardRevision=0,boardDirection='arrival';
 const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',maxZoom:19,updateWhenIdle:true,keepBuffer:2}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
@@ -78,7 +78,7 @@ const q=$('search').value.toLowerCase();const list=aircraft.filter(a=>{const rou
 const container=$('flights');container.innerHTML='';
 if(!list.length){container.textContent=loading?'Retrieving real aircraft positions…':'No aircraft loaded for this feed. Check connection status below.';return}
 const fragment=document.createDocumentFragment();for(const a of list.slice(0,100)){
-const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');const route=routeById.get(a.id)?.route;b.innerHTML='<span><strong>'+esc(route?.flightNumber||a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(route?.airline||a.reg||a.type||a.country||a.id)+'</small><span class="flightextra">'+(route?esc((route.origin.iata||route.origin.icao)+' → '+(route.destination.iata||route.destination.icao)):'Destination unavailable')+'</span></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
+const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');const found=routeById.get(a.id)?.route;const route=found?.plausible===false?null:found;b.innerHTML='<span><strong>'+esc(route?.flightNumber||a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(route?.airline||a.reg||a.type||a.country||a.id)+'</small><span class="flightextra">'+(route?esc((route.origin.iata||route.origin.icao)+' → '+(route.destination.iata||route.destination.icao)):'Destination unavailable')+'</span></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
 container.appendChild(fragment);if(list.length>100){const tip=document.createElement('p');tip.style.padding='5px 15px';tip.textContent='Showing 100 of '+list.length+' records. Search to narrow.';container.appendChild(tip)}}
 function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;observed=[{lat:a.lat,lon:a.lon,time:Date.now()}];lastSelectedPoll=0;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));if(globeApi)globeApi.focus(a.lat,a.lon,1.85);showReferenceRoute=false;historySource='session';historicalPoints=[];historyStatus='Checking historical track availability';selectionRevision++;const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Last observed (estimated)',Number.isFinite(a.age)?formatSast(retrieved-a.age*1000):'Unknown'],['Departure → destination','Route reference only (not a confirmed current itinerary)']];
 $('detail').innerHTML='<div class="eyebrow">OBSERVED AIRCRAFT</div><h2>'+esc(a.call||a.reg||a.id.toUpperCase())+'</h2><p class="small">'+esc(a.reg||a.type||a.country||'Registration not available')+'</p>'+rows.map(([l,v])=>'<div class="datum"><div class="eyebrow">'+esc(l)+'</div><div class="value">'+esc(v)+'</div></div>').join('');render();lookupSelected(a);updateTrackNotice();loadHistorical(a);}
@@ -160,7 +160,8 @@ async function lookupSelected(a){
  render();
 }
 async function enrichRoutes(revision){
- const run=++bulkRevision;
+ if(Date.now()-lastBulkLookup<180000&&routeById.size)return;
+ lastBulkLookup=Date.now();const run=++bulkRevision;
  const candidates=aircraft.filter(a=>a.call?.length>=3&&Number.isFinite(a.lat)&&Number.isFinite(a.lon)).slice(0,150);
  $('routeStatus').textContent='Identifying routes for '+candidates.length+' reported aircraft…';
  let matched=0;
@@ -173,7 +174,7 @@ async function enrichRoutes(revision){
    const data=await response.json();
    if(run!==bulkRevision||revision!==requestRevision)return;
    const byCall=new Map((data.routes||[]).map(r=>[r.callsign,r]));
-   for(const a of batch){const route=byCall.get(a.call.trim().toUpperCase());if(route){const prior=routeById.get(a.id);if(!prior?.route||prior.route.source==='ADSB.lol routeset')routeById.set(a.id,{route});matched++}}
+   for(const a of batch){const route=byCall.get(a.call.trim().toUpperCase());if(route){const prior=routeById.get(a.id);if(!prior?.route||prior.route.source==='ADSB.lol routeset')routeById.set(a.id,{route});if(route.plausible!==false)matched++}}
    render();
   }catch(e){$('routeStatus').textContent='Some route lookups unavailable; known routes remain visible.';break;}
  }
