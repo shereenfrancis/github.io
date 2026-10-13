@@ -165,7 +165,7 @@ async function startGlobe(){
   function resize(){const w=Math.max(host.clientWidth,200),h=Math.max(host.clientHeight,250);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
   new ResizeObserver(resize).observe(host);resize();
   function focus(lat,lon){targetLat=Math.max(-80,Math.min(80,lat));targetLon=lon;distance=Math.min(distance,3.15);}
-  function center(){return{lat:clat,lng:clon};}
+  function center(){return{lat:targetLat,lng:targetLon};}
   renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY,lat:targetLat,lon:targetLon,moved:false};renderer.domElement.setPointerCapture(e.pointerId)});
   renderer.domElement.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.hypot(dx,dy)>5)dragStart.moved=true;if(dragStart.moved){targetLon=dragStart.lon-dx*.32;targetLat=Math.max(-80,Math.min(80,dragStart.lat+dy*.28));}});
   renderer.domElement.addEventListener('pointerup',e=>{const wasMoved=dragStart?.moved;dragStart=null;dragging=false;if(wasMoved)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);pickRay.setFromCamera(pointer,camera);const hits=pickRay.intersectObjects(instances,false);const hit=hits[0];if(hit){const found=planeMappings[instances.indexOf(hit.object)]?.[hit.instanceId];if(found)select(found.id)}});
