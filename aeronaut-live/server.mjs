@@ -7,9 +7,10 @@ const port = Number(process.env.PORT || 10000);
 const cache = new Map();
 const status = { global: null, regional: null };
 const TTL = { global: 1200000, regional: 50000 };
-const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'X-Content-Type-Options': 'nosniff' };
 function json(res, code, data) {
-  res.writeHead(code, { ...cors, 'Content-Type': 'application/json; charset=utf-8' });
+  const cachePolicy = code === 200 && Array.isArray(data?.aircraft) && !data.stale ? (data.scope === 'worldwide' ? 'public, s-maxage=1200, stale-while-revalidate=300' : 'public, s-maxage=50, stale-while-revalidate=20') : 'no-store';
+  res.writeHead(code, { ...cors, 'Cache-Control': cachePolicy, 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
 }
 async function fetchJson(url) {
@@ -85,7 +86,7 @@ async function regionalFeed(lat,lon) {
     throw new Error('Both regional providers failed. '+(problem?.message||'Unknown upstream error'));
   });
 }
-const server = http.createServer(async(req,res)=>{
+export async function handle(req,res){
   const url = new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS')return json(res,204,{});
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
@@ -107,5 +108,5 @@ const server = http.createServer(async(req,res)=>{
   } catch(e) {
     return json(res,502,{error:'Aircraft provider unavailable',detail:e.message,checkedAt:new Date().toISOString()});
   }
-});
-server.listen(port,'0.0.0.0',()=>console.log('Aeronaut listening on '+port));
+}
+if (!process.env.VERCEL) http.createServer(handle).listen(port,'0.0.0.0',()=>console.log('Aeronaut listening on '+port));
