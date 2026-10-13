@@ -21,7 +21,7 @@ input{width:100%;padding:12px;border-radius:4px;background:#0b1b24;border:1px so
 .flight{display:flex;justify-content:space-between;gap:8px;padding:12px 19px;border:0;border-bottom:1px solid #2e4249;background:transparent;color:#e4eee7;width:100%;text-align:left}
 .flight:hover,.flight.active{background:#29434b}.flight strong{font:12px ui-monospace,monospace}.flight small{color:#9aaeb4;font-size:10px;display:block;margin-top:4px}.flight em{font:10px ui-monospace,monospace;color:#e0c18d;white-space:nowrap}
 #mapwrap{position:relative;min-height:350px;background:#0a222b}#map{position:absolute;inset:0}
-.leaflet-container{background:#0a222b}.leaflet-control-attribution{font-size:9px!important}
+.leaflet-container{background:#0a222b}.leaflet-tile-pane{filter:invert(.88) hue-rotate(180deg) saturate(.65) brightness(.86) contrast(1.08)}.leaflet-control-attribution{font-size:10px!important}
 .overlay{position:absolute;z-index:500;pointer-events:none;color:#eef1e8;top:20px;left:22px;text-shadow:0 1px 10px #091b22}
 .overlay h2{font-size:29px}.overlay .eyebrow{color:#d4e1d4}
 .badge{background:#0d222ad9;padding:10px 12px;border:1px solid #466068;border-radius:4px;position:absolute;z-index:500;bottom:19px;left:18px;max-width:70%;font:11px ui-monospace,monospace;line-height:1.6;pointer-events:none;color:#d8e5da}
@@ -43,7 +43,7 @@ footer button{border:1px solid #617b79;color:#e1eee3;background:transparent;bord
 const $=id=>document.getElementById(id); const cities={'Johannesburg':[-26.204,28.047],'Cape Town':[-33.925,18.424],London:[51.507,-.128],'New York':[40.713,-74.006],Dubai:[25.205,55.271],Tokyo:[35.676,139.65],Singapore:[1.352,103.82],Sydney:[-33.869,151.209]};
 let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=false, source='',expiry=0;
 const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',maxZoom:19,updateWhenIdle:true,keepBuffer:2}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fm=x=>Number.isFinite(x)?Math.round(x).toLocaleString('en-US'):'Unknown';
