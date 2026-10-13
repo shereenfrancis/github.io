@@ -73,7 +73,7 @@ if(!list.length){container.textContent=loading?'Retrieving real aircraft positio
 const fragment=document.createDocumentFragment();for(const a of list.slice(0,100)){
 const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');b.innerHTML='<span><strong>'+esc(a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(a.reg||a.type||a.country||a.id)+'</small></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
 container.appendChild(fragment);if(list.length>100){const tip=document.createElement('p');tip.style.padding='5px 15px';tip.textContent='Showing 100 of '+list.length+' records. Search to narrow.';container.appendChild(tip)}}
-function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;observed=[{lat:a.lat,lon:a.lon,time:Date.now()}];lastSelectedPoll=0;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));if(globeApi)globeApi.focus(a.lat,a.lon);const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
+function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;observed=[{lat:a.lat,lon:a.lon,time:Date.now()}];lastSelectedPoll=0;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));if(globeApi)globeApi.focus(a.lat,a.lon,1.85);const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
 $('detail').innerHTML='<div class="eyebrow">OBSERVED AIRCRAFT</div><h2>'+esc(a.call||a.reg||a.id.toUpperCase())+'</h2><p class="small">'+esc(a.reg||a.type||a.country||'Registration not available')+'</p>'+rows.map(([l,v])=>'<div class="datum"><div class="eyebrow">'+esc(l)+'</div><div class="value">'+esc(v)+'</div></div>').join('');render();}
 async function refresh(force=false){if(loading)return;if(mode==='global'&&retrieved&&Date.now()-retrieved<1200000){setStatus('Global snapshot · refresh limited to 20 min');return}
 loading=true;$('refresh').disabled=true;setStatus('Retrieving '+(mode==='global'?'worldwide':'local')+' observations…');
@@ -93,14 +93,14 @@ render();updateClock();
 finally{loading=false;$('refresh').disabled=false}}
 function change(m){if(loading)return;mode=m;retrieved=0;aircraft=[];selected=null;observed=[];$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
 $('world').onclick=()=>change('global');$('local').onclick=()=>change('regional');$('near').onclick=()=>change('regional');$('refresh').onclick=()=>refresh(true);$('search').oninput=render;
-for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);if(globeApi)globeApi.focus(ll[0],ll[1]);change('regional')};$('cities').appendChild(b)}
+for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);if(globeApi)globeApi.focus(ll[0],ll[1],2.15);change('regional')};$('cities').appendChild(b)}
 map.on('moveend',()=>{if(mode==='regional')$('near').textContent='Load aircraft near this map centre →'});
 setInterval(()=>{if(mode==='regional'&&!loading&&Date.now()>expiry)refresh()},20000);
 
 async function startGlobe(){
  const host=$('globe');
  try{
-  const THREE=await import('https://esm.sh/three@0.179.1');
+  const [THREE,geo]=await Promise.all([import('https://esm.sh/three@0.179.1'),import('./globe-geo.mjs')]);
   const scene=new THREE.Scene();const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.setClearColor(0x07131d,0);
   host.appendChild(renderer.domElement);
@@ -123,7 +123,7 @@ async function startGlobe(){
   starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   const stars=new THREE.Points(starsGeo,new THREE.PointsMaterial({color:0xcfe2df,size:.045,sizeAttenuation:true,transparent:true,opacity:.68}));scene.add(stars);
   // Longitude + latitude are converted to true points on a spherical Earth.
-  const toPoint=(lat,lon,r=1)=>{const p=lat*Math.PI/180,l=lon*Math.PI/180;return new THREE.Vector3(-r*Math.cos(p)*Math.cos(l),r*Math.sin(p),r*Math.cos(p)*Math.sin(l));};
+  const toPoint=(lat,lon,r=1)=>new THREE.Vector3(...geo.toCartesian(lat,lon,r));
   const planeGeometry=new THREE.Shape();
   planeGeometry.moveTo(0,.075);planeGeometry.lineTo(.014,.005);planeGeometry.lineTo(.065,-.025);planeGeometry.lineTo(.065,-.042);planeGeometry.lineTo(.011,-.028);planeGeometry.lineTo(.009,-.055);planeGeometry.lineTo(.028,-.068);planeGeometry.lineTo(.028,-.078);planeGeometry.lineTo(0,-.070);planeGeometry.lineTo(-.028,-.078);planeGeometry.lineTo(-.028,-.068);planeGeometry.lineTo(-.009,-.055);planeGeometry.lineTo(-.011,-.028);planeGeometry.lineTo(-.065,-.042);planeGeometry.lineTo(-.065,-.025);planeGeometry.lineTo(-.014,.005);planeGeometry.lineTo(0,.075);
   const geom=new THREE.ShapeGeometry(planeGeometry);
@@ -140,14 +140,14 @@ async function startGlobe(){
     const a=list[n];if(!Number.isFinite(a.lat)||!Number.isFinite(a.lon))continue;
     const ix=a.ground?1:0,inst=instances[ix],at=inst.count++;
     const p=toPoint(a.lat,a.lon,1.027);const normal=p.clone().normalize();
-    const east=new THREE.Vector3(Math.sin(a.lon*Math.PI/180),0,Math.cos(a.lon*Math.PI/180)).normalize();
-    const north=new THREE.Vector3().crossVectors(normal,east).normalize();
+    const east=new THREE.Vector3(...geo.tangentEast(a.lon));
+    const north=new THREE.Vector3(...geo.tangentNorth(a.lat,a.lon));
     const hd=(a.heading||0)*Math.PI/180;
     // Shape nose local +Y. Forward heading is clockwise from geographic north.
     const forward=north.multiplyScalar(Math.cos(hd)).addScaledVector(east,Math.sin(hd)).normalize();
     const right=new THREE.Vector3().crossVectors(forward,normal).normalize();
     const basis=new THREE.Matrix4().makeBasis(right,forward,normal);
-    dummy.position.copy(p);dummy.quaternion.setFromRotationMatrix(basis);dummy.scale.setScalar(a.id===selected?1.55:1);dummy.updateMatrix();inst.setMatrixAt(at,dummy.matrix);planeMappings[ix][at]=a;
+    dummy.position.copy(p);dummy.quaternion.setFromRotationMatrix(basis);dummy.scale.setScalar(a.id===selected?1.25:.72);dummy.updateMatrix();inst.setMatrixAt(at,dummy.matrix);planeMappings[ix][at]=a;
    }
    for(const i of instances)i.instanceMatrix.needsUpdate=true;
    const sel=list.find(a=>a.id===selected);
@@ -160,15 +160,15 @@ async function startGlobe(){
    }
   }
   let data=[],chosen=null,history=[];
-  function positionCamera(){const a=clat*Math.PI/180,o=clon*Math.PI/180;const target=toPoint(clat,clon,1);camera.position.copy(target.clone().multiplyScalar(distance));camera.up.set(0,1,0);camera.lookAt(origin);}
+  function positionCamera(){const target=toPoint(clat,clon,1);camera.position.copy(target.clone().multiplyScalar(distance));camera.up.set(0,1,0);camera.lookAt(origin);}
   positionCamera();
   function resize(){const w=Math.max(host.clientWidth,200),h=Math.max(host.clientHeight,250);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
   new ResizeObserver(resize).observe(host);resize();
-  function focus(lat,lon){targetLat=Math.max(-80,Math.min(80,lat));targetLon=lon;distance=Math.min(distance,3.15);}
+  function focus(lat,lon,desiredDistance=2.15){targetLat=Math.max(-80,Math.min(80,lat));targetLon=geo.wrapLongitude(lon);distance=desiredDistance;}
   function center(){return{lat:targetLat,lng:targetLon};}
   renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY,lat:targetLat,lon:targetLon,moved:false};renderer.domElement.setPointerCapture(e.pointerId)});
   renderer.domElement.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.hypot(dx,dy)>5)dragStart.moved=true;if(dragStart.moved){targetLon=dragStart.lon-dx*.32;targetLat=Math.max(-80,Math.min(80,dragStart.lat+dy*.28));}});
-  renderer.domElement.addEventListener('pointerup',e=>{const wasMoved=dragStart?.moved;dragStart=null;dragging=false;if(wasMoved)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);pickRay.setFromCamera(pointer,camera);const hits=pickRay.intersectObjects(instances,false);const hit=hits[0];if(hit){const found=planeMappings[instances.indexOf(hit.object)]?.[hit.instanceId];if(found)select(found.id)}});
+  renderer.domElement.addEventListener('pointerup',e=>{const wasMoved=dragStart?.moved;dragStart=null;dragging=false;if(wasMoved)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);pickRay.setFromCamera(pointer,camera);const hits=pickRay.intersectObjects(instances,false);const earthHit=pickRay.intersectObject(earth,false)[0];const hit=hits.find(h=>!earthHit||h.distance<earthHit.distance+.006);if(hit){const found=planeMappings[instances.indexOf(hit.object)]?.[hit.instanceId];if(found)select(found.id)}});
   renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.55,Math.min(6,distance+Math.sign(e.deltaY)*.24))},{passive:false});
   let running=true;function tick(){if(!running)return;clat+=(targetLat-clat)*.1;let delta=((targetLon-clon+540)%360)-180;clon+=delta*.1;positionCamera();renderer.render(scene,camera);requestAnimationFrame(tick)}tick();
   return{setAircraft:(a,id,h)=>{data=a;chosen=id;history=h;placePlanes(data,chosen,history)},focus,center,resize};
