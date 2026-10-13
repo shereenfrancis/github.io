@@ -48,7 +48,7 @@ L.control.zoom({position:'bottomright'}).addTo(map);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fm=x=>Number.isFinite(x)?Math.round(x).toLocaleString('en-US'):'Unknown';
 const age=()=>retrieved?Math.floor((Date.now()-retrieved)/1000):null;
-function updateClock(){$('clock').textContent=new Date().toISOString().slice(11,19)+' UTC';if(retrieved){$('stamp').textContent='Last successful snapshot '+new Date(retrieved).toUTCString()+' · age '+Math.max(0,age())+'s · '+source;}}
+function updateClock(){$('clock').textContent=new Date().toISOString().slice(11,19)+' UTC';if(retrieved){$('stamp').textContent=(mode==='global'&&source.includes('regional samples')?'PARTIAL GLOBAL SAMPLE · ':'')+'Last successful snapshot '+new Date(retrieved).toUTCString()+' · age '+Math.max(0,age())+'s · '+source;}}
 setInterval(updateClock,1000);updateClock();
 function setStatus(s){$('status').textContent=s}
 function render(){
@@ -70,8 +70,12 @@ const c=map.getCenter();let url=mode==='global'?'/api/global':'/api/aircraft?lat
 const r=await fetch(url,{headers:{Accept:'application/json'}});const raw=await r.json();if(!r.ok)throw Error(raw.detail||raw.error||'HTTP '+r.status);
 aircraft=raw.aircraft||[];source=raw.source||'Unknown';retrieved=Date.parse(raw.retrievedAt)||Date.now();expiry=Date.now()+(raw.refreshSeconds||50)*1000;
 $('source').textContent=source+' · '+aircraft.length.toLocaleString()+' observations';
-$('warning').textContent=raw.stale?'Delayed cached data: '+(raw.warning||'upstream unavailable'):'Observed positions · not a complete worldwide feed';
-setStatus(raw.stale?'Delayed positions':'Positions received · '+aircraft.length.toLocaleString());if(!aircraft.some(x=>x.id===selected)){$('detail').innerHTML='<p class="small">Select an aircraft to inspect its report.</p>';selected=null}
+const partial=raw.scope==='sampled';
+$('scope').textContent=partial?'GLOBAL SAMPLE / SELECTED REGIONS':mode==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';
+$('title').textContent=partial?'Selected skies worldwide':mode==='global'?'The world in motion':'Local flight observations';
+$('warning').textContent=raw.stale?'Delayed cached data: '+(raw.warning||'upstream unavailable'):raw.warning||'Observed positions · receiver coverage may vary';
+if(partial){$('stamp').textContent='Partial global sample: '+(raw.sampledRegionCount||0)+' of '+(raw.totalSampleRegions||0)+' regions reporting. Not full worldwide coverage.';}
+setStatus(raw.stale?'Delayed positions':partial?'Partial global sample · '+aircraft.length.toLocaleString():'Positions received · '+aircraft.length.toLocaleString());if(!aircraft.some(x=>x.id===selected)){$('detail').innerHTML='<p class="small">Select an aircraft to inspect its report.</p>';selected=null}
 render();updateClock();
 }catch(e){setStatus('Flight data unavailable');$('warning').textContent=e.message; $('source').textContent='Server reached, upstream request failed';if(!aircraft.length)$('flights').textContent='Aircraft data unavailable: '+e.message+' — use Local live or retry.'}
 finally{loading=false;$('refresh').disabled=false}}
