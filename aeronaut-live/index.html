@@ -57,6 +57,8 @@ let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=fals
 let globeApi=null,view3d=true,observed=[],lastSelectedPoll=0,requestRevision=0,cityRequestRevision=0,activePlace='World',regionalCenter=null;
 let currentAirports=[],activeAirport=null,airportTab='nearby',routeById=new Map(),routeRequest=0,selectionRevision=0,bulkRevision=0,lastBulkLookup=0,airportPins=[],routeLine=null,observedMapLine=null,historicalMapLine=null,showReferenceRoute=false,historySource='session',historyStatus='',historicalPoints=[],historyRevision=0,boardRevision=0,boardDirection='arrival';
 const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
+// Leaflet cannot measure a display:none container. Recalculate after the 2D view is revealed.
+const mapHost=$('map');
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',maxZoom:19,updateWhenIdle:true,keepBuffer:2}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -73,10 +75,10 @@ if(globeApi){globeApi.setAircraft(aircraft,selected,observed);globeApi.setAirpor
 renderAirportPins();
 $('count').textContent=aircraft.length.toLocaleString();for(const m of markers)map.removeLayer(m);markers=[];
 for(const a of aircraft){const picked=a.id===selected; const icon=L.divIcon({className:'plane-marker',html:'<span class="plane-icon '+(a.ground?'ground ':'')+(picked?'selected':'')+'" style="transform:rotate('+(a.heading||0)+'deg)">✈</span>',iconSize:[25,25],iconAnchor:[12,12]});
-const m=L.marker([a.lat,a.lon],{icon,keyboard:false,title:a.call||a.id}).on('click',()=>select(a.id));m.addTo(map);markers.push(m);}
+if(!Number.isFinite(a.lat)||!Number.isFinite(a.lon))continue;const m=L.marker([a.lat,a.lon],{icon,keyboard:false,title:a.call||a.id}).on('click',()=>select(a.id));m.addTo(map);markers.push(m);}
 const q=$('search').value.toLowerCase();const list=aircraft.filter(a=>{const route=routeById.get(a.id)?.route;const kind=classifyRoute(route,activeAirport);return(airportTab==='nearby'||kind===(airportTab==='arrivals'?'arrival':'departure'))&&(a.call+' '+a.id+' '+a.reg+' '+a.type+' '+(route?.airline||'')+' '+(route?.flightNumber||'')).toLowerCase().includes(q)}).sort((a,b)=>(a.id===selected?-1:0)-(b.id===selected?-1:0));
 const container=$('flights');container.innerHTML='';
-if(!list.length){container.textContent=loading?'Retrieving real aircraft positions…':'No aircraft loaded for this feed. Check connection status below.';return}
+if(!list.length){container.textContent=loading?'Retrieving real aircraft positions…':aircraft.length?'No aircraft match this filter. Choose Nearby and clear the search to see all '+aircraft.length+' observed aircraft.':'No aircraft loaded for this feed. Check connection status below.';return}
 const fragment=document.createDocumentFragment();for(const a of list.slice(0,100)){
 const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');const found=routeById.get(a.id)?.route;const route=found?.plausible===false?null:found;b.innerHTML='<span><strong>'+esc(route?.flightNumber||a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(route?.airline||a.reg||a.type||a.country||a.id)+'</small><span class="flightextra">'+(route?esc((route.origin.iata||route.origin.icao)+' → '+(route.destination.iata||route.destination.icao)):'Destination unavailable')+'</span></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
 container.appendChild(fragment);if(list.length>100){const tip=document.createElement('p');tip.style.padding='5px 15px';tip.textContent='Showing 100 of '+list.length+' records. Search to narrow.';container.appendChild(tip)}}
@@ -145,14 +147,14 @@ async function routeFor(a,revid){
 function updateTrackNotice(){if(!selected)return;let node=$('observedTrackInfo');if(!node){node=document.createElement('p');node.id='observedTrackInfo';node.className='route-note';$('detail').append(node)}node.textContent=(historicalPoints.length>1?'Blue: '+historicalPoints.length+' archived provider positions. ':'Historical positions unavailable. ')+(observed.length>1?'Green: '+observed.length+' positions recorded in this session.':'Green observed track will grow as fresh positions arrive.');}
 async function lookupSelected(a){
  const revision=++selectionRevision;let answer=routeById.get(a.id)||null;
- if(!answer?.route){try{const res=await fetch('/api/identity?icao='+encodeURIComponent(a.id)+'&callsign='+encodeURIComponent(a.call||''));if(res.ok){const detail=await res.json();answer=detail.route?detail:(answer||detail)}}catch(e){/* Keep route from batch source if available. */}}
+ if(!answer?.route){try{const res=await fetch('/api/identity?icao='+encodeURIComponent(a.id)+'&callsign='+encodeURIComponent(a.call||''));const detail=await res.json();if(res.ok)answer=detail.route?detail:(answer||detail);else if(!answer)answer={reason:detail.error||'Aircraft identity service failed (HTTP '+res.status+')'};}catch(e){if(!answer)answer={reason:'Aircraft identity lookup could not connect'};}}
  if(selected!==a.id||revision!==selectionRevision)return;
  if(answer)routeById.set(a.id,answer);
  const extra=$('routeDetails');if(extra)extra.remove();
  const panel=document.createElement('div');panel.id='routeDetails';$('detail').append(panel);
  const route=answer?.route;
  if(route&&route.source==='ADSB.lol routeset'&&route.plausible===false){panel.innerHTML='<p class="route-note">A possible route was found, but the provider marked it implausible for this aircraft position. Destination is not shown as reliable.</p>';return}
- if(!route){panel.innerHTML='<p class="route-note">'+esc(answer?.reason||'Origin and destination not independently identified for this aircraft')+'. The callsign is not a confirmed flight itinerary.</p>';return;}
+ if(!route){panel.innerHTML='<p class="route-note">'+esc(answer?.reason||'No matching route returned')+'. This means the lookup did not establish a destination; it does not mean the flight has none. Callsign: '+esc(a.call||'not broadcast')+'.</p>';return;}
  const fields=[['Airline',route.airline||'Unknown'],['Flight number',route.flightNumber||route.callsignIcao||a.call],['Origin',route.origin.name+' ('+(route.origin.iata||route.origin.icao)+')'],['Destination',route.destination.name+' ('+(route.destination.iata||route.destination.icao)+')']];
  for(const [label,value]of fields){const node=document.createElement('div');node.className='datum';node.innerHTML='<div class="eyebrow">'+esc(label)+'</div><div class="value">'+esc(value)+'</div>';panel.append(node)}
  panel.insertAdjacentHTML('beforeend','<p class="route-note">Airline and airports are reference data for this callsign, not a confirmed itinerary today.</p>');
@@ -314,7 +316,7 @@ async function startGlobe(){
   return{setAircraft:(a,id,h)=>{data=a;chosen=id;history=h;placePlanes(data,chosen,history);rescalePlaneMarkers()},setAirports,setReferenceRoute,setHistoricalTrack,focus,zoom,center,resize};
  }catch(e){$('globeHint').textContent='3D graphics unavailable: '+(e?.message||'module load error')+'. Use 2D MAP.';$('globeView').disabled=true;$('flatView').click();return null}
 }
-function setView3d(on){view3d=on;$('globe').style.display=on?'block':'none';$('map').style.display=on?'none':'block';$('globeView').classList.toggle('active',on);$('flatView').classList.toggle('active',!on);$('globeHint').style.display=on?'block':'none';if(!on)requestAnimationFrame(()=>map.invalidateSize());else if(globeApi)globeApi.resize();}
+function setView3d(on){view3d=on;$('globe').style.display=on?'block':'none';mapHost.style.display=on?'none':'block';$('globeView').classList.toggle('active',on);$('flatView').classList.toggle('active',!on);$('globeHint').style.display=on?'block':'none';if(!on){requestAnimationFrame(()=>{map.invalidateSize({pan:false,animate:false});for(const m of markers)m.update();for(const m of airportPins)m.update();});setTimeout(()=>map.invalidateSize({pan:false,animate:false}),130);}else if(globeApi)globeApi.resize();}
 $('globeView').onclick=()=>setView3d(true);$('flatView').onclick=()=>setView3d(false);$('zoomIn3d').onclick=()=>globeApi?.zoom(.72);$('zoomOut3d').onclick=()=>globeApi?.zoom(1.38);
 async function pollSelected(){
  if(!selected||Date.now()-lastSelectedPoll<35000)return;
