@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { normalizeFlightBoard, normalizeOpenSkyTrack, validateIcao } from './flight-quality.mjs';
 import { AIRPORTS, airportsForCity, normalizeFlightRoute } from './flight-reference.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -168,6 +169,49 @@ async function flightReference(callsign){
   routeCache.set(clean,{payload,expires:Date.now()+(payload.route?1800000:300000)});
   return payload;
 }
+
+const supplementalCache=new Map();
+async function timedCache(key,ttl,fn){
+  const item=supplementalCache.get(key),now=Date.now();
+  if(item&&item.expires>now)return item.result;
+  if(item?.pending)return item.pending;
+  const pending=fn().then(result=>{supplementalCache.set(key,{result,expires:Date.now()+ttl});return result})
+    .catch(error=>{supplementalCache.delete(key);throw error});
+  supplementalCache.set(key,{pending});return pending;
+}
+async function airportBoard(iata,direction){
+  const key=process.env.AVIATIONSTACK_API_KEY;
+  if(!key)return {available:false,reason:'No licensed flight-status provider connected',flights:[]};
+  const url=new URL('https://api.aviationstack.com/v1/flights');
+  url.searchParams.set('access_key',key);url.searchParams.set(direction==='departure'?'dep_iata':'arr_iata',iata);
+  url.searchParams.set('limit','100');
+  return timedCache('board:'+iata+':'+direction,120000,async()=>{
+    const raw=await fetchJson(url.toString());
+    if(raw.error)throw new Error('Flight status provider returned '+String(raw.error.code||'an error'));
+    return {available:true,source:'Aviationstack',queriedAt:new Date().toISOString(),
+      scope:'provider returned records; may be delayed or incomplete',flights:normalizeFlightBoard(raw,iata,direction)};
+  });
+}
+async function historicalTrack(icao){
+  // OpenSky tracks require explicit OAuth credentials and depend on provider entitlement.
+  const id=process.env.OPENSKY_CLIENT_ID,secret=process.env.OPENSKY_CLIENT_SECRET;
+  if(!id||!secret)return {available:false,reason:'Historical track provider not configured',points:[]};
+  const token=await timedCache('opensky-token',120000,async()=>{
+    const body=new URLSearchParams({grant_type:'client_credentials',client_id:id,client_secret:secret});
+    const response=await fetch('https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token',
+      {method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body,signal:AbortSignal.timeout(9000)});
+    if(!response.ok)throw new Error('Historical track authorization rejected');
+    const payload=await response.json();return payload.access_token;
+  });
+  return timedCache('track:'+icao,180000,async()=>{
+    const response=await fetch('https://opensky-network.org/api/tracks/all?icao24='+icao,
+      {headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(9000)});
+    if(!response.ok)throw new Error('Historical track provider HTTP '+response.status);
+    const raw=await response.json();
+    return {available:true,source:'OpenSky Network',retrievedAt:new Date().toISOString(),
+      points:normalizeOpenSkyTrack(raw,icao)};
+  });
+}
 export async function handle(req,res){
   const url = new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS')return json(res,204,{});
@@ -175,6 +219,8 @@ export async function handle(req,res){
   try {
     if(url.pathname==='/api/airports'){const city=String(url.searchParams.get('city')||'').trim();return json(res,200,{airports:city?airportsForCity(city):AIRPORTS});}
     if(url.pathname==='/api/route'){const callsign=String(url.searchParams.get('callsign')||'');return json(res,200,await flightReference(callsign));}
+    if(url.pathname==='/api/flight-status'){const iata=String(url.searchParams.get('airport')||'').toUpperCase();const direction=String(url.searchParams.get('direction')||'arrival');if(!/^[A-Z]{3}$/.test(iata)||!['arrival','departure'].includes(direction))return json(res,400,{error:'Valid IATA airport and direction required'});return json(res,200,await airportBoard(iata,direction));}
+    if(url.pathname==='/api/history'){const icao=String(url.searchParams.get('icao')||'').toLowerCase();if(!validateIcao(icao))return json(res,400,{error:'Valid ICAO hex required'});return json(res,200,await historicalTrack(icao));}
     if(url.pathname==='/api/health') return json(res,200,{status:'ok',time:new Date().toISOString(),note:'Server running; consult /api/status for aviation feeds'});
     if(url.pathname==='/api/status') return json(res,200,status);
     if(url.pathname==='/api/global') return json(res,200,await globalFeed());
