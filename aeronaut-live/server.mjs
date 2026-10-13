@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { normalizeFlightBoard, normalizeOpenSkyTrack, validateIcao } from './flight-quality.mjs';
-import { AIRPORTS, airportsForCity, normalizeFlightRoute, normalizeAircraftIdentity } from './flight-reference.mjs';
+import { AIRPORTS, airportsForCity, normalizeFlightRoute, normalizeAircraftIdentity, normalizeRoutesetResponse } from './flight-reference.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -244,9 +244,48 @@ async function historicalTrack(icao){
       points:normalizeOpenSkyTrack(raw,icao)};
   });
 }
+const bulkRouteCache=new Map();
+async function routeset(planes){
+ const clean=planes.filter(p=>p&&typeof p.callsign==='string'&&/^[a-z0-9]{3,12}$/i.test(p.callsign)&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&Math.abs(p.lat)<=85&&Math.abs(p.lng)<=180).slice(0,75)
+   .map(p=>({callsign:p.callsign.trim().toUpperCase(),lat:p.lat,lng:p.lng}));
+ if(!clean.length)return {routes:[],source:'ADSB.lol routeset',reason:'No valid aircraft callsigns'};
+ const output=new Map(),pending=[];
+ for(const p of clean){
+   const k=p.callsign+':'+Math.round(p.lat)+':'+Math.round(p.lng);
+   const hit=bulkRouteCache.get(k);
+   if(hit&&hit.expires>Date.now()){if(hit.route)output.set(p.callsign,hit.route)}
+   else pending.push(p);
+ }
+ if(pending.length){
+   try{
+     const response=await fetch('https://api.adsb.lol/api/0/routeset',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','User-Agent':'AeronautObservatory/1.0'},body:JSON.stringify({planes:pending}),signal:AbortSignal.timeout(9000)});
+     if(!response.ok)throw new Error('Routeset HTTP '+response.status);
+     const raw=await response.json();
+     const routes=normalizeRoutesetResponse(raw);
+     for(const p of pending){
+       const matches=routes.filter(r=>r.callsign===p.callsign);
+       // Ambiguous reused callsigns should never be assigned an arbitrary route.
+       const route=matches.length===1?matches[0]:null;
+       const k=p.callsign+':'+Math.round(p.lat)+':'+Math.round(p.lng);
+       bulkRouteCache.set(k,{route,expires:Date.now()+(route?300000:90000)});
+       if(route)output.set(p.callsign,route);
+     }
+   }catch(e){return {routes:[...output.values()],source:'ADSB.lol routeset',reason:'Route lookup temporarily unavailable'};}
+ }
+ if(bulkRouteCache.size>1200)bulkRouteCache.clear();
+ return {routes:[...output.values()],source:'ADSB.lol routeset',checkedAt:new Date().toISOString(),notVerifiedForCurrentFlight:true};
+}
+async function readPlanesBody(req){
+ let body='',size=0;
+ for await(const chunk of req){size+=chunk.length;if(size>12000)throw new Error('Route request too large');body+=chunk.toString('utf8')}
+ const value=JSON.parse(body);
+ if(!Array.isArray(value?.planes)||value.planes.length>75)throw new Error('Expected up to 75 aircraft');
+ return value.planes;
+}
 export async function handle(req,res){
   const url = new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS')return json(res,204,{});
+  if(req.method==='POST'&&url.pathname==='/api/routes'){try{return json(res,200,await routeset(await readPlanesBody(req)))}catch(e){return json(res,400,{error:e.message})}}
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
   try {
     if(url.pathname==='/api/airports'){const city=String(url.searchParams.get('city')||'').trim();return json(res,200,{airports:city?airportsForCity(city):AIRPORTS});}

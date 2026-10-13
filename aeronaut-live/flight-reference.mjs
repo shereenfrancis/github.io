@@ -99,3 +99,39 @@ export function normalizeAircraftIdentity(payload){
    isFlightOperatorVerified:false
  };
 }
+
+
+/**
+ * Normalize the publicly documented ADSB.lol /api/0/routeset response.
+ * This is a route reference, not evidence of today's operated itinerary.
+ * "plausible" is passed through as an upstream hint, never treated as verification.
+ */
+export function normalizeRoutesetResponse(payload) {
+  const rows=Array.isArray(payload)?payload:Array.isArray(payload?.routes)?payload.routes:[];
+  const result=[];
+  const text=v=>typeof v==='string'?v.trim().slice(0,120):'';
+  for(const row of rows) {
+    if(!row||typeof row!=='object')continue;
+    const callsign=text(row.callsign).toUpperCase();
+    if(!/^[A-Z0-9]{3,12}$/.test(callsign))continue;
+    let rawAirports=Array.isArray(row._airports)?row._airports:[];
+    const airport=a=>{
+      if(!a || !Number.isFinite(Number(a.lat)) || !Number.isFinite(Number(a.lon)))return null;
+      const lat=Number(a.lat),lon=Number(a.lon);
+      if(Math.abs(lat)>90||Math.abs(lon)>180)return null;
+      return {name:text(a.name),city:text(a.location),country:text(a.countryiso2),
+        iata:text(a.iata).toUpperCase(),icao:text(a.icao).toUpperCase(),lat,lon};
+    };
+    const origin=airport(rawAirports[0]),destination=airport(rawAirports[rawAirports.length-1]);
+    if(!origin||!destination||(!origin.iata&&!origin.icao)||(!destination.iata&&!destination.icao))continue;
+    if(origin.icao && destination.icao && origin.icao===destination.icao)continue;
+    const code=text(row.airline_code).toUpperCase(),number=text(row.number);
+    result.push({
+      callsign,callsignIcao:callsign,flightNumber:code&&number?code+number:callsign,
+      airline:'',airlineIcao:code,airlineIata:'',origin,destination,
+      source:'ADSB.lol routeset',verifiedSchedule:false,
+      plausible:row.plausible===true||row.plausible===1?true:row.plausible===false||row.plausible===0?false:null
+    });
+  }
+  return result;
+}
