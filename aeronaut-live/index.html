@@ -1,0 +1,85 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aeronaut — World flight observatory</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{font-family:Inter,system-ui,-apple-system,sans-serif;color:#e8eee9;background:#091920}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}a{color:#bfdec9}
+header{height:70px;background:#101f26;border-bottom:1px solid #30444c;padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font:normal 32px Georgia,serif;letter-spacing:-1.3px;color:#e8ecda}.brand small{font:9px ui-monospace,monospace;letter-spacing:2px;color:#90b2a9;display:block;margin-top:2px}
+.live{color:#d9c49b;font:11px ui-monospace,monospace;text-align:right}
+.shell{display:grid;grid-template-columns:290px minmax(0,1fr) 285px;height:calc(100dvh - 118px);min-height:550px}
+aside{background:#12232b;min-width:0;overflow:auto}aside.left{border-right:1px solid #35474c}aside.right{border-left:1px solid #35474c}
+.section{padding:22px;border-bottom:1px solid #31474d}h1,h2{font-family:Georgia,serif;font-weight:400;margin:10px 0}h1{font-size:32px;line-height:1.12}h2{font-size:24px}
+.eyebrow{letter-spacing:1.7px;color:#a5b8ac;font:10px ui-monospace,monospace}
+.small{font-size:12px;line-height:1.65;color:#a9bdba}
+.switch{display:flex;gap:5px;margin-top:18px;background:#091921;padding:4px;border-radius:5px}
+.switch button{flex:1;background:transparent;border:0;color:#afbfbd;padding:10px 5px;border-radius:4px;font-size:12px}
+.switch button.active{background:#c0dace;color:#102e31;font-weight:650}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:13px}
+.controls button{padding:10px 5px;background:#213841;border:1px solid #4d646a;border-radius:4px;color:#d9e9e2;font-size:11px}
+.controls button:hover{border-color:#d7c493}
+input{width:100%;padding:12px;border-radius:4px;background:#0b1b24;border:1px solid #426068;color:white;margin-top:8px;font-size:12px}
+.flight{display:flex;justify-content:space-between;gap:8px;padding:12px 19px;border:0;border-bottom:1px solid #2e4249;background:transparent;color:#e4eee7;width:100%;text-align:left}
+.flight:hover,.flight.active{background:#29434b}.flight strong{font:12px ui-monospace,monospace}.flight small{color:#9aaeb4;font-size:10px;display:block;margin-top:4px}.flight em{font:10px ui-monospace,monospace;color:#e0c18d;white-space:nowrap}
+#mapwrap{position:relative;min-height:350px;background:#0a222b}#map{position:absolute;inset:0}
+.leaflet-container{background:#0a222b}.leaflet-control-attribution{font-size:9px!important}
+.overlay{position:absolute;z-index:500;pointer-events:none;color:#eef1e8;top:20px;left:22px;text-shadow:0 1px 10px #091b22}
+.overlay h2{font-size:29px}.overlay .eyebrow{color:#d4e1d4}
+.badge{background:#0d222ad9;padding:10px 12px;border:1px solid #466068;border-radius:4px;position:absolute;z-index:500;bottom:19px;left:18px;max-width:70%;font:11px ui-monospace,monospace;line-height:1.6;pointer-events:none;color:#d8e5da}
+.data{padding:17px 20px}.data strong{display:block;font:23px Georgia,serif;margin-top:6px}.datum{padding:12px 0;border-bottom:1px solid #314750}.datum .eyebrow{font-size:9px}.datum .value{margin-top:5px;font:13px ui-monospace,monospace;word-break:break-word}
+button.primary{border:0;background:#c8dacb;padding:12px;color:#15312f;border-radius:4px;width:100%;margin-top:15px;font-weight:650}
+footer{height:48px;background:#0c1b22;border-top:1px solid #31474d;display:flex;align-items:center;justify-content:space-between;padding:8px 20px;gap:10px;font:10px ui-monospace,monospace;color:#abbdb8}
+footer button{border:1px solid #617b79;color:#e1eee3;background:transparent;border-radius:4px;padding:8px 12px}
+.plane-marker{background:none;border:0;filter:drop-shadow(0 1px 2px #07121a)}.plane-icon{display:block;color:#c0f0d8;text-shadow:0 1px 2px #0b2224;font-size:21px;line-height:23px}.plane-icon.ground{color:#e2c18c}.plane-icon.selected{color:white;font-size:27px}
+@media(max-width:1000px){.shell{grid-template-columns:235px minmax(0,1fr)}aside.right{grid-column:1/-1;max-height:380px;border-top:1px solid #31454b}#mapwrap{min-height:550px}}
+@media(max-width:650px){header{padding:0 12px}.brand{font-size:25px}.shell{display:flex;flex-direction:column;height:auto;min-height:0}#mapwrap{height:57vh;min-height:360px;order:0}aside.left{order:1;max-height:380px}aside.right{order:2;max-height:none}.section{padding:14px}.overlay h2{font-size:22px}footer{height:auto;min-height:48px;flex-wrap:wrap}}
+</style></head><body>
+<header><div class="brand">aeronaut.<small>THE WORLD'S SKIES · FLIGHT OBSERVATORY</small></div><div class="live"><div id="clock">UTC —</div><div id="status">Establishing connection</div></div></header>
+<div class="shell"><aside class="left"><div class="section"><div class="eyebrow">01 / EXPLORE</div><h1>The skies,<br><i>observed.</i></h1><p class="small">Actual reported aircraft positions. No invented flights, routes or continuous movement.</p><div class="switch"><button id="world" class="active">Worldwide</button><button id="local">Local live</button></div></div><div class="section"><div class="eyebrow">EXPLORE AIRSPACE</div><div class="controls" id="cities"></div><button class="primary" id="near">Load aircraft near map centre →</button></div><div class="section"><div class="eyebrow">AIRCRAFT IN CURRENT FEED · <span id="count">0</span></div><input id="search" placeholder="Search callsign, hex, registration…" aria-label="Search loaded aircraft"></div><div id="flights" class="small" style="padding:15px 19px">Awaiting aircraft reports.</div></aside>
+<div id="mapwrap"><div id="map"></div><div class="overlay"><div class="eyebrow" id="scope">WORLDWIDE / REPORTED POSITIONS</div><h2 id="title">The world in motion</h2></div><div class="badge" id="stamp">Only reported aircraft positions are plotted. Map tiles © OpenStreetMap contributors.</div></div>
+<aside class="right"><div class="section"><div class="eyebrow">02 / AIRCRAFT RECORD</div><h2>Flight details</h2></div><div id="detail" class="data"><p class="small">Select an aircraft on the map or from the list to inspect altitude, speed, heading, last observed time and location.</p><p class="small">ADS-B positions do not establish a flight's departure or destination.</p></div><div class="section"><div class="eyebrow">DATA TRANSPARENCY</div><p class="small">Worldwide snapshots depend on OpenSky access and may be unavailable on an anonymous connection. Local tracking uses ADSB.lol and Airplanes.live when accessible. Flights outside receiver coverage may be missing.</p></div></aside></div>
+<footer><span id="source">Data source not yet connected</span><span id="warning">Position observations are not a complete flight schedule.</span><button id="refresh">Refresh feed ↻</button></footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+(()=> {
+const $=id=>document.getElementById(id); const cities={'Johannesburg':[-26.204,28.047],'Cape Town':[-33.925,18.424],London:[51.507,-.128],'New York':[40.713,-74.006],Dubai:[25.205,55.271],Tokyo:[35.676,139.65],Singapore:[1.352,103.82],Sydney:[-33.869,151.209]};
+let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=false, source='',expiry=0;
+const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:19}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fm=x=>Number.isFinite(x)?Math.round(x).toLocaleString('en-US'):'Unknown';
+const age=()=>retrieved?Math.floor((Date.now()-retrieved)/1000):null;
+function updateClock(){$('clock').textContent=new Date().toISOString().slice(11,19)+' UTC';if(retrieved){$('stamp').textContent='Last successful snapshot '+new Date(retrieved).toUTCString()+' · age '+Math.max(0,age())+'s · '+source;}}
+setInterval(updateClock,1000);updateClock();
+function setStatus(s){$('status').textContent=s}
+function render(){
+$('count').textContent=aircraft.length.toLocaleString();for(const m of markers)map.removeLayer(m);markers=[];
+for(const a of aircraft){const picked=a.id===selected; const icon=L.divIcon({className:'plane-marker',html:'<span class="plane-icon '+(a.ground?'ground ':'')+(picked?'selected':'')+'" style="transform:rotate('+(a.heading||0)+'deg)">✈</span>',iconSize:[25,25],iconAnchor:[12,12]});
+const m=L.marker([a.lat,a.lon],{icon,keyboard:false,title:a.call||a.id}).on('click',()=>select(a.id));m.addTo(map);markers.push(m);}
+const q=$('search').value.toLowerCase();const list=aircraft.filter(a=>(a.call+' '+a.id+' '+a.reg+' '+a.type).toLowerCase().includes(q)).sort((a,b)=>(a.id===selected?-1:0)-(b.id===selected?-1:0));
+const container=$('flights');container.innerHTML='';
+if(!list.length){container.textContent=loading?'Retrieving real aircraft positions…':'No aircraft loaded for this feed. Check connection status below.';return}
+const fragment=document.createDocumentFragment();for(const a of list.slice(0,100)){
+const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');b.innerHTML='<span><strong>'+esc(a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(a.reg||a.type||a.country||a.id)+'</small></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
+container.appendChild(fragment);if(list.length>100){const tip=document.createElement('p');tip.style.padding='5px 15px';tip.textContent='Showing 100 of '+list.length+' records. Search to narrow.';container.appendChild(tip)}}
+function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
+$('detail').innerHTML='<div class="eyebrow">OBSERVED AIRCRAFT</div><h2>'+esc(a.call||a.reg||a.id.toUpperCase())+'</h2><p class="small">'+esc(a.reg||a.type||a.country||'Registration not available')+'</p>'+rows.map(([l,v])=>'<div class="datum"><div class="eyebrow">'+esc(l)+'</div><div class="value">'+esc(v)+'</div></div>').join('');render();}
+async function refresh(force=false){if(loading)return;if(mode==='global'&&retrieved&&Date.now()-retrieved<1200000){setStatus('Global snapshot · refresh limited to 20 min');return}
+loading=true;$('refresh').disabled=true;setStatus('Retrieving '+(mode==='global'?'worldwide':'local')+' observations…');
+try{
+const c=map.getCenter();let url=mode==='global'?'/api/global':'/api/aircraft?lat='+c.lat.toFixed(3)+'&lon='+c.lng.toFixed(3);
+const r=await fetch(url,{headers:{Accept:'application/json'}});const raw=await r.json();if(!r.ok)throw Error(raw.detail||raw.error||'HTTP '+r.status);
+aircraft=raw.aircraft||[];source=raw.source||'Unknown';retrieved=Date.parse(raw.retrievedAt)||Date.now();expiry=Date.now()+(raw.refreshSeconds||50)*1000;
+$('source').textContent=source+' · '+aircraft.length.toLocaleString()+' observations';
+$('warning').textContent=raw.stale?'Delayed cached data: '+(raw.warning||'upstream unavailable'):'Observed positions · not a complete worldwide feed';
+setStatus(raw.stale?'Delayed positions':'Positions received · '+aircraft.length.toLocaleString());if(!aircraft.some(x=>x.id===selected)){$('detail').innerHTML='<p class="small">Select an aircraft to inspect its report.</p>';selected=null}
+render();updateClock();
+}catch(e){setStatus('Flight data unavailable');$('warning').textContent=e.message; $('source').textContent='Server reached, upstream request failed';if(!aircraft.length)$('flights').textContent='Aircraft data unavailable: '+e.message+' — use Local live or retry.'}
+finally{loading=false;$('refresh').disabled=false}}
+function change(m){if(loading)return;mode=m;retrieved=0;aircraft=[];selected=null;$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
+$('world').onclick=()=>change('global');$('local').onclick=()=>change('regional');$('near').onclick=()=>change('regional');$('refresh').onclick=()=>refresh(true);$('search').oninput=render;
+for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);change('regional')};$('cities').appendChild(b)}
+map.on('moveend',()=>{if(mode==='regional')$('near').textContent='Load aircraft near this map centre →'});
+setInterval(()=>{if(mode==='regional'&&!loading&&Date.now()>expiry)refresh()},20000);
+refresh(true);
+})();
+</script></body></html>
