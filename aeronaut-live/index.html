@@ -32,16 +32,27 @@ footer button{border:1px solid #617b79;color:#e1eee3;background:transparent;bord
 .plane-marker{background:none;border:0;filter:drop-shadow(0 1px 2px #07121a)}.plane-icon{display:block;color:#c0f0d8;text-shadow:0 1px 2px #0b2224;font-size:21px;line-height:23px}.plane-icon.ground{color:#e2c18c}.plane-icon.selected{color:white;font-size:27px}
 @media(max-width:1000px){.shell{grid-template-columns:235px minmax(0,1fr)}aside.right{grid-column:1/-1;max-height:380px;border-top:1px solid #31454b}#mapwrap{min-height:550px}}
 @media(max-width:650px){header{padding:0 12px}.brand{font-size:25px}.shell{display:flex;flex-direction:column;height:auto;min-height:0}#mapwrap{height:57vh;min-height:360px;order:0}aside.left{order:1;max-height:380px}aside.right{order:2;max-height:none}.section{padding:14px}.overlay h2{font-size:22px}footer{height:auto;min-height:48px;flex-wrap:wrap}}
+
+/* Immersive globe canvas. Kept entirely separate from map tiles. */
+#globe{position:absolute;inset:0;background:radial-gradient(circle at 47% 48%,#173d4b 0%,#071a25 60%,#041019 100%);display:block}
+#globe canvas{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#globe canvas:active{cursor:grabbing}
+.globe-tools{position:absolute;right:15px;top:18px;z-index:550;display:flex;gap:7px}
+.globe-tools button{background:#0c252ce6;border:1px solid #587079;color:#e5ebdf;border-radius:4px;padding:9px 12px;font:11px ui-monospace,monospace}
+.globe-tools button.active{background:#c7dccd;color:#132d2a}
+.globe-hint{position:absolute;z-index:510;bottom:100px;right:15px;background:#0c252bd9;border:1px solid #49626a;padding:8px 11px;color:#d7e8df;font:10px ui-monospace,monospace;pointer-events:none;max-width:220px}
+#scope{max-width:280px}
 </style></head><body>
 <header><div class="brand">aeronaut.<small>THE WORLD'S SKIES · FLIGHT OBSERVATORY</small></div><div class="live"><div id="clock">UTC —</div><div id="status">Establishing connection</div></div></header>
 <div class="shell"><aside class="left"><div class="section"><div class="eyebrow">01 / EXPLORE</div><h1>The skies,<br><i>observed.</i></h1><p class="small">Actual reported aircraft positions. No invented flights, routes or continuous movement.</p><div class="switch"><button id="world" class="active">Worldwide</button><button id="local">Local live</button></div></div><div class="section"><div class="eyebrow">EXPLORE AIRSPACE</div><div class="controls" id="cities"></div><button class="primary" id="near">Load aircraft near map centre →</button></div><div class="section"><div class="eyebrow">AIRCRAFT IN CURRENT FEED · <span id="count">0</span></div><input id="search" placeholder="Search callsign, hex, registration…" aria-label="Search loaded aircraft"></div><div id="flights" class="small" style="padding:15px 19px">Awaiting aircraft reports.</div></aside>
-<div id="mapwrap"><div id="map"></div><div class="overlay"><div class="eyebrow" id="scope">WORLDWIDE / REPORTED POSITIONS</div><h2 id="title">The world in motion</h2></div><div class="badge" id="stamp">Only reported aircraft positions are plotted. Map tiles © OpenStreetMap contributors.</div></div>
+<div id="mapwrap"><div id="map" style="display:none"></div><div id="globe"></div><div class="globe-tools"><button id="globeView" class="active">3D GLOBE</button><button id="flatView">2D MAP</button></div><div class="globe-hint" id="globeHint">Drag to rotate Earth · scroll to zoom · click aircraft</div><div class="overlay"><div class="eyebrow" id="scope">WORLDWIDE / REPORTED POSITIONS</div><h2 id="title">The world in motion</h2></div><div class="badge" id="stamp">Only reported aircraft positions are plotted. Map tiles © OpenStreetMap contributors.</div></div>
 <aside class="right"><div class="section"><div class="eyebrow">02 / AIRCRAFT RECORD</div><h2>Flight details</h2></div><div id="detail" class="data"><p class="small">Select an aircraft on the map or from the list to inspect altitude, speed, heading, last observed time and location.</p><p class="small">ADS-B positions do not establish a flight's departure or destination.</p></div><div class="section"><div class="eyebrow">DATA TRANSPARENCY</div><p class="small">Worldwide snapshots depend on OpenSky access and may be unavailable on an anonymous connection. Local tracking uses ADSB.lol and Airplanes.live when accessible. Flights outside receiver coverage may be missing.</p></div></aside></div>
 <footer><span id="source">Data source not yet connected</span><span id="warning">Position observations are not a complete flight schedule.</span><button id="refresh">Refresh feed ↻</button></footer>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
 (()=> {
 const $=id=>document.getElementById(id); const cities={'Johannesburg':[-26.204,28.047],'Cape Town':[-33.925,18.424],London:[51.507,-.128],'New York':[40.713,-74.006],Dubai:[25.205,55.271],Tokyo:[35.676,139.65],Singapore:[1.352,103.82],Sydney:[-33.869,151.209]};
 let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=false, source='',expiry=0;
+let globeApi=null,view3d=true,observed=[],lastSelectedPoll=0;
 const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',maxZoom:19,updateWhenIdle:true,keepBuffer:2}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
@@ -52,6 +63,7 @@ function updateClock(){$('clock').textContent=new Date().toISOString().slice(11,
 setInterval(updateClock,1000);updateClock();
 function setStatus(s){$('status').textContent=s}
 function render(){
+if(globeApi)globeApi.setAircraft(aircraft,selected,observed);
 $('count').textContent=aircraft.length.toLocaleString();for(const m of markers)map.removeLayer(m);markers=[];
 for(const a of aircraft){const picked=a.id===selected; const icon=L.divIcon({className:'plane-marker',html:'<span class="plane-icon '+(a.ground?'ground ':'')+(picked?'selected':'')+'" style="transform:rotate('+(a.heading||0)+'deg)">✈</span>',iconSize:[25,25],iconAnchor:[12,12]});
 const m=L.marker([a.lat,a.lon],{icon,keyboard:false,title:a.call||a.id}).on('click',()=>select(a.id));m.addTo(map);markers.push(m);}
@@ -61,12 +73,12 @@ if(!list.length){container.textContent=loading?'Retrieving real aircraft positio
 const fragment=document.createDocumentFragment();for(const a of list.slice(0,100)){
 const b=document.createElement('button');b.className='flight'+(selected===a.id?' active':'');b.innerHTML='<span><strong>'+esc(a.call||a.reg||a.id.toUpperCase())+'</strong><small>'+esc(a.reg||a.type||a.country||a.id)+'</small></span><em>'+fm(a.alt)+' ft</em>';b.onclick=()=>select(a.id);fragment.appendChild(b)}
 container.appendChild(fragment);if(list.length>100){const tip=document.createElement('p');tip.style.padding='5px 15px';tip.textContent='Showing 100 of '+list.length+' records. Search to narrow.';container.appendChild(tip)}}
-function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
+function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;observed=[{lat:a.lat,lon:a.lon,time:Date.now()}];lastSelectedPoll=0;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));if(globeApi)globeApi.focus(a.lat,a.lon);const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
 $('detail').innerHTML='<div class="eyebrow">OBSERVED AIRCRAFT</div><h2>'+esc(a.call||a.reg||a.id.toUpperCase())+'</h2><p class="small">'+esc(a.reg||a.type||a.country||'Registration not available')+'</p>'+rows.map(([l,v])=>'<div class="datum"><div class="eyebrow">'+esc(l)+'</div><div class="value">'+esc(v)+'</div></div>').join('');render();}
 async function refresh(force=false){if(loading)return;if(mode==='global'&&retrieved&&Date.now()-retrieved<1200000){setStatus('Global snapshot · refresh limited to 20 min');return}
 loading=true;$('refresh').disabled=true;setStatus('Retrieving '+(mode==='global'?'worldwide':'local')+' observations…');
 try{
-const c=map.getCenter();let url=mode==='global'?'/api/global':'/api/aircraft?lat='+c.lat.toFixed(3)+'&lon='+c.lng.toFixed(3);
+const c=view3d&&globeApi?globeApi.center():map.getCenter();let url=mode==='global'?'/api/global':'/api/aircraft?lat='+c.lat.toFixed(3)+'&lon='+c.lng.toFixed(3);
 const r=await fetch(url,{headers:{Accept:'application/json'}});const raw=await r.json();if(!r.ok)throw Error(raw.detail||raw.error||'HTTP '+r.status);
 aircraft=raw.aircraft||[];source=raw.source||'Unknown';retrieved=Date.parse(raw.retrievedAt)||Date.now();expiry=Date.now()+(raw.refreshSeconds||50)*1000;
 $('source').textContent=source+' · '+aircraft.length.toLocaleString()+' observations';
@@ -79,11 +91,107 @@ setStatus(raw.stale?'Delayed positions':partial?'Partial global sample · '+airc
 render();updateClock();
 }catch(e){setStatus('Flight data unavailable');$('warning').textContent=e.message; $('source').textContent='Server reached, upstream request failed';if(!aircraft.length)$('flights').textContent='Aircraft data unavailable: '+e.message+' — use Local live or retry.'}
 finally{loading=false;$('refresh').disabled=false}}
-function change(m){if(loading)return;mode=m;retrieved=0;aircraft=[];selected=null;$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
+function change(m){if(loading)return;mode=m;retrieved=0;aircraft=[];selected=null;observed=[];$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
 $('world').onclick=()=>change('global');$('local').onclick=()=>change('regional');$('near').onclick=()=>change('regional');$('refresh').onclick=()=>refresh(true);$('search').oninput=render;
-for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);change('regional')};$('cities').appendChild(b)}
+for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);if(globeApi)globeApi.focus(ll[0],ll[1]);change('regional')};$('cities').appendChild(b)}
 map.on('moveend',()=>{if(mode==='regional')$('near').textContent='Load aircraft near this map centre →'});
 setInterval(()=>{if(mode==='regional'&&!loading&&Date.now()>expiry)refresh()},20000);
+
+async function startGlobe(){
+ const host=$('globe');
+ try{
+  const THREE=await import('https://esm.sh/three@0.179.1');
+  const scene=new THREE.Scene();const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.setClearColor(0x07131d,0);
+  host.appendChild(renderer.domElement);
+  const camera=new THREE.PerspectiveCamera(43,1,.1,250);
+  let distance=3.65,clat=15,clon=10,targetLat=15,targetLon=10,dragging=false,dragStart=null;
+  const origin=new THREE.Vector3(0,0,0);
+  const earthGroup=new THREE.Group();scene.add(earthGroup);
+  const earthGeo=new THREE.SphereGeometry(1,96,64);
+  const mat=new THREE.MeshPhongMaterial({color:0x91b7b0,shininess:10});
+  const earth=new THREE.Mesh(earthGeo,mat);earthGroup.add(earth);
+  const loader=new THREE.TextureLoader();
+  loader.setCrossOrigin('anonymous');
+  loader.load('https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',t=>{t.colorSpace=THREE.SRGBColorSpace;mat.map=t;mat.color.setHex(0xffffff);mat.needsUpdate=true},undefined,()=>{$('globeHint').textContent='Earth texture unavailable · aircraft positions remain geographic'});
+  const atmosphere=new THREE.Mesh(new THREE.SphereGeometry(1.052,64,48),new THREE.MeshBasicMaterial({color:0x4d9fa6,transparent:true,opacity:.12,side:THREE.BackSide,depthWrite:false}));scene.add(atmosphere);
+  const halo=new THREE.Mesh(new THREE.SphereGeometry(1.025,64,48),new THREE.MeshBasicMaterial({color:0x77c4cc,transparent:true,opacity:.035,side:THREE.BackSide,depthWrite:false}));scene.add(halo);
+  scene.add(new THREE.AmbientLight(0x96b4c7,1.6));
+  const sun=new THREE.DirectionalLight(0xffe6c6,2.45);sun.position.set(-4,3,6);scene.add(sun);
+  const starsGeo=new THREE.BufferGeometry(),positions=[];
+  for(let i=0;i<900;i++){const th=i*2.39996322973,y=1-2*(i+.5)/900,rr=Math.sqrt(1-y*y),r=24+(i%10)*.45;positions.push(Math.cos(th)*rr*r,y*r,Math.sin(th)*rr*r)}
+  starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  const stars=new THREE.Points(starsGeo,new THREE.PointsMaterial({color:0xcfe2df,size:.045,sizeAttenuation:true,transparent:true,opacity:.68}));scene.add(stars);
+  // Longitude + latitude are converted to true points on a spherical Earth.
+  const toPoint=(lat,lon,r=1)=>{const p=lat*Math.PI/180,l=lon*Math.PI/180;return new THREE.Vector3(-r*Math.cos(p)*Math.cos(l),r*Math.sin(p),r*Math.cos(p)*Math.sin(l));};
+  const planeGeometry=new THREE.Shape();
+  planeGeometry.moveTo(0,.075);planeGeometry.lineTo(.014,.005);planeGeometry.lineTo(.065,-.025);planeGeometry.lineTo(.065,-.042);planeGeometry.lineTo(.011,-.028);planeGeometry.lineTo(.009,-.055);planeGeometry.lineTo(.028,-.068);planeGeometry.lineTo(.028,-.078);planeGeometry.lineTo(0,-.070);planeGeometry.lineTo(-.028,-.078);planeGeometry.lineTo(-.028,-.068);planeGeometry.lineTo(-.009,-.055);planeGeometry.lineTo(-.011,-.028);planeGeometry.lineTo(-.065,-.042);planeGeometry.lineTo(-.065,-.025);planeGeometry.lineTo(-.014,.005);planeGeometry.lineTo(0,.075);
+  const geom=new THREE.ShapeGeometry(planeGeometry);
+  const materials=[new THREE.MeshBasicMaterial({color:0xc4f2d9,side:THREE.DoubleSide,depthTest:true}),new THREE.MeshBasicMaterial({color:0xf6cc89,side:THREE.DoubleSide,depthTest:true})];
+  const instances=materials.map(m=>{const i=new THREE.InstancedMesh(geom,m,25000);i.count=0;i.instanceMatrix.setUsage(THREE.DynamicDrawUsage);scene.add(i);return i});
+  const dummy=new THREE.Object3D(),planeMappings=[[],[]],up=new THREE.Vector3(0,0,1),trackMat=new THREE.LineBasicMaterial({color:0xffd18f,transparent:true,opacity:.92,depthTest:true});
+  let selectedTrail=null;const pickRay=new THREE.Raycaster(),pointer=new THREE.Vector2();
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.018,.023,36),new THREE.MeshBasicMaterial({color:0xffdd96,side:THREE.DoubleSide,transparent:true,opacity:.95,depthTest:true}));scene.add(ring);ring.visible=false;
+  function placePlanes(list,selected,history){
+   planeMappings[0]=[];planeMappings[1]=[];
+   for(const i of instances)i.count=0;
+   const max=Math.min(20000,list.length);
+   for(let n=0;n<max;n++){
+    const a=list[n];if(!Number.isFinite(a.lat)||!Number.isFinite(a.lon))continue;
+    const ix=a.ground?1:0,inst=instances[ix],at=inst.count++;
+    const p=toPoint(a.lat,a.lon,1.027);const normal=p.clone().normalize();
+    const east=new THREE.Vector3(Math.sin(a.lon*Math.PI/180),0,Math.cos(a.lon*Math.PI/180)).normalize();
+    const north=new THREE.Vector3().crossVectors(east,normal).normalize();
+    const hd=(a.heading||0)*Math.PI/180;
+    // Shape nose local +Y. Forward heading is clockwise from geographic north.
+    const forward=north.multiplyScalar(Math.cos(hd)).addScaledVector(east,Math.sin(hd)).normalize();
+    const right=new THREE.Vector3().crossVectors(forward,normal).normalize();
+    const basis=new THREE.Matrix4().makeBasis(right,forward,normal);
+    dummy.position.copy(p);dummy.quaternion.setFromRotationMatrix(basis);dummy.scale.setScalar(a.id===selected?1.55:1);dummy.updateMatrix();inst.setMatrixAt(at,dummy.matrix);planeMappings[ix][at]=a;
+   }
+   for(const i of instances)i.instanceMatrix.needsUpdate=true;
+   const sel=list.find(a=>a.id===selected);
+   if(sel){ring.visible=true;const normal=toPoint(sel.lat,sel.lon,1.036);ring.position.copy(normal);ring.quaternion.setFromUnitVectors(up,normal.clone().normalize());}
+   else ring.visible=false;
+   if(selectedTrail){scene.remove(selectedTrail);selectedTrail.geometry.dispose();selectedTrail=null;}
+   if(history&&history.length>1){
+    const points=history.filter(h=>Number.isFinite(h.lat)&&Number.isFinite(h.lon)).map(h=>toPoint(h.lat,h.lon,1.035));
+    if(points.length>1){selectedTrail=new THREE.Line(new THREE.BufferGeometry().setFromPoints(points),trackMat);scene.add(selectedTrail)}
+   }
+  }
+  let data=[],chosen=null,history=[];
+  function positionCamera(){const a=clat*Math.PI/180,o=clon*Math.PI/180;const target=toPoint(clat,clon,1);camera.position.copy(target.clone().multiplyScalar(distance));camera.up.set(0,1,0);camera.lookAt(origin);}
+  positionCamera();
+  function resize(){const w=Math.max(host.clientWidth,200),h=Math.max(host.clientHeight,250);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
+  new ResizeObserver(resize).observe(host);resize();
+  function focus(lat,lon){targetLat=Math.max(-80,Math.min(80,lat));targetLon=lon;distance=Math.min(distance,3.15);}
+  function center(){return{lat:clat,lng:clon};}
+  renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY,lat:targetLat,lon:targetLon,moved:false};renderer.domElement.setPointerCapture(e.pointerId)});
+  renderer.domElement.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.hypot(dx,dy)>5)dragStart.moved=true;if(dragStart.moved){targetLon=dragStart.lon-dx*.32;targetLat=Math.max(-80,Math.min(80,dragStart.lat+dy*.28));}});
+  renderer.domElement.addEventListener('pointerup',e=>{const wasMoved=dragStart?.moved;dragStart=null;dragging=false;if(wasMoved)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);pickRay.setFromCamera(pointer,camera);const hits=pickRay.intersectObjects(instances,false);const hit=hits[0];if(hit){const found=planeMappings[instances.indexOf(hit.object)]?.[hit.instanceId];if(found)select(found.id)}});
+  renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.55,Math.min(6,distance+Math.sign(e.deltaY)*.24))},{passive:false});
+  let running=true;function tick(){if(!running)return;clat+=(targetLat-clat)*.1;let delta=((targetLon-clon+540)%360)-180;clon+=delta*.1;positionCamera();renderer.render(scene,camera);requestAnimationFrame(tick)}tick();
+  return{setAircraft:(a,id,h)=>{data=a;chosen=id;history=h;placePlanes(data,chosen,history)},focus,center,resize};
+ }catch(e){$('globeHint').textContent='3D graphics unavailable: '+(e?.message||'module load error')+'. Use 2D MAP.';$('globeView').disabled=true;$('flatView').click();return null}
+}
+function setView3d(on){view3d=on;$('globe').style.display=on?'block':'none';$('map').style.display=on?'none':'block';$('globeView').classList.toggle('active',on);$('flatView').classList.toggle('active',!on);$('globeHint').style.display=on?'block':'none';if(!on)requestAnimationFrame(()=>map.invalidateSize());else if(globeApi)globeApi.resize();}
+$('globeView').onclick=()=>setView3d(true);$('flatView').onclick=()=>setView3d(false);
+async function pollSelected(){
+ if(!selected||Date.now()-lastSelectedPoll<35000)return;
+ lastSelectedPoll=Date.now();const active=selected;
+ try{
+  const r=await fetch('/api/track?icao='+encodeURIComponent(active));
+  if(!r.ok)return;const j=await r.json(),a=j.aircraft?.[0];
+  if(!a||selected!==active||j.stale)return;
+  const old=observed[observed.length-1];
+  const moved=!old||Math.abs(old.lat-a.lat)+Math.abs(old.lon-a.lon)>.00008;
+  if(moved)observed.push({lat:a.lat,lon:a.lon,time:Date.now()});
+  observed=observed.slice(-100);
+  const ix=aircraft.findIndex(x=>x.id===active);if(ix>=0){aircraft[ix]={...aircraft[ix],...a};render();}
+ }catch(e){/* Position polling is best effort; do not manufacture movement. */}
+}
+setInterval(pollSelected,7000);
+startGlobe().then(g=>{globeApi=g;if(g)g.setAircraft(aircraft,selected,observed)});
 refresh(true);
 })();
 </script></body></html>
