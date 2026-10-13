@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { AIRPORTS, airportsForCity, normalizeFlightRoute } from './flight-reference.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -150,11 +151,30 @@ async function trackedAircraft(icao) {
     throw new Error('Aircraft location unavailable ('+(error?.message||'no report')+')');
   });
 }
+// Best-effort callsign lookup. This is route-reference data, never an official live schedule.
+const routeCache=new Map();
+async function flightReference(callsign){
+  const clean=String(callsign||'').trim().toUpperCase();
+  if(!/^[A-Z0-9]{3,9}$/.test(clean))return {route:null,reason:'No valid callsign'};
+  const hit=routeCache.get(clean);
+  if(hit&&Date.now()<hit.expires)return hit.payload;
+  let payload;
+  try{
+    const response=await fetchJson('https://api.adsbdb.com/v0/callsign/'+encodeURIComponent(clean));
+    const route=normalizeFlightRoute(response);
+    payload={route,reason:route?null:'No route reference for callsign'};
+  }catch(e){payload={route:null,reason:'Route service unavailable'};}
+  if(routeCache.size>350)routeCache.clear();
+  routeCache.set(clean,{payload,expires:Date.now()+(payload.route?1800000:300000)});
+  return payload;
+}
 export async function handle(req,res){
   const url = new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS')return json(res,204,{});
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
   try {
+    if(url.pathname==='/api/airports'){const city=String(url.searchParams.get('city')||'').trim();return json(res,200,{airports:city?airportsForCity(city):AIRPORTS});}
+    if(url.pathname==='/api/route'){const callsign=String(url.searchParams.get('callsign')||'');return json(res,200,await flightReference(callsign));}
     if(url.pathname==='/api/health') return json(res,200,{status:'ok',time:new Date().toISOString(),note:'Server running; consult /api/status for aviation feeds'});
     if(url.pathname==='/api/status') return json(res,200,status);
     if(url.pathname==='/api/global') return json(res,200,await globalFeed());
