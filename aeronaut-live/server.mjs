@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { normalizeFlightBoard, normalizeOpenSkyTrack, validateIcao } from './flight-quality.mjs';
-import { AIRPORTS, airportsForCity, normalizeFlightRoute } from './flight-reference.mjs';
+import { AIRPORTS, airportsForCity, normalizeFlightRoute, normalizeAircraftIdentity } from './flight-reference.mjs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -170,6 +170,38 @@ async function flightReference(callsign){
   return payload;
 }
 
+
+async function aircraftIdentity(icao,callsign){
+  // ADSBDB returns airframe identification and a *reference* route, not a live itinerary.
+  const hex=String(icao||'').trim().toLowerCase(),flight=String(callsign||'').trim().toUpperCase();
+  if(!/^[0-9a-f]{6}$/.test(hex))return {aircraft:null,route:null,reason:'Invalid aircraft identifier'};
+  const cacheKey=hex+':'+flight;
+  const known=identityCache.get(cacheKey);
+  if(known&&known.until>Date.now())return known.data;
+  if(known?.pending)return known.pending;
+  const pending=(async()=>{
+    let aircraft=null,route=null,reason='';
+    try{
+      const q=flight&&/^[A-Z0-9]{3,9}$/.test(flight)?'?callsign='+encodeURIComponent(flight):'';
+      const data=await fetchJson('https://api.adsbdb.com/v0/aircraft/'+hex+q);
+      aircraft=normalizeAircraftIdentity(data);
+      route=normalizeFlightRoute(data);
+    }catch(e){reason='Aircraft reference lookup unavailable';}
+    if(!route&&flight&&/^[A-Z0-9]{3,9}$/.test(flight)){
+      const answer=await flightReference(flight);
+      route=answer.route||null;
+      if(!route)reason=answer.reason||'No reference route found';
+    }
+    const data={aircraft,route,reason:route?null:(reason||'No route identified for callsign'),
+      checkedAt:new Date().toISOString(),routeProvenance:'Reference database, not a verified current-flight itinerary'};
+    if(identityCache.size>250)identityCache.clear();
+    identityCache.set(cacheKey,{data,until:Date.now()+(route?1800000:300000)});
+    return data;
+  })();
+  identityCache.set(cacheKey,{pending});
+  try{return await pending;}catch(e){identityCache.delete(cacheKey);throw e;}
+}
+const identityCache=new Map();
 const supplementalCache=new Map();
 async function timedCache(key,ttl,fn){
   const item=supplementalCache.get(key),now=Date.now();
@@ -219,6 +251,7 @@ export async function handle(req,res){
   try {
     if(url.pathname==='/api/airports'){const city=String(url.searchParams.get('city')||'').trim();return json(res,200,{airports:city?airportsForCity(city):AIRPORTS});}
     if(url.pathname==='/api/route'){const callsign=String(url.searchParams.get('callsign')||'');return json(res,200,await flightReference(callsign));}
+    if(url.pathname==='/api/identity'){const icao=String(url.searchParams.get('icao')||'').toLowerCase(),callsign=String(url.searchParams.get('callsign')||'');if(!/^[0-9a-f]{6}$/.test(icao)||callsign.length>12)return json(res,400,{error:'Invalid ICAO or callsign'});return json(res,200,await aircraftIdentity(icao,callsign));}
     if(url.pathname==='/api/flight-status'){const iata=String(url.searchParams.get('airport')||'').toUpperCase();const direction=String(url.searchParams.get('direction')||'arrival');if(!/^[A-Z]{3}$/.test(iata)||!['arrival','departure'].includes(direction))return json(res,400,{error:'Valid IATA airport and direction required'});return json(res,200,await airportBoard(iata,direction));}
     if(url.pathname==='/api/history'){const icao=String(url.searchParams.get('icao')||'').toLowerCase();if(!validateIcao(icao))return json(res,400,{error:'Valid ICAO hex required'});return json(res,200,await historicalTrack(icao));}
     if(url.pathname==='/api/health') return json(res,200,{status:'ok',time:new Date().toISOString(),note:'Server running; consult /api/status for aviation feeds'});
