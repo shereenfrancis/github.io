@@ -130,7 +130,7 @@ export function normalizeRoutesetResponse(payload) {
       callsign,callsignIcao:callsign,flightNumber:code&&number?code+number:callsign,
       airline:'',airlineIcao:code,airlineIata:'',origin,destination,
       source:'ADSB.lol routeset',verifiedSchedule:false,
-      plausible:row.plausible===true?true:row.plausible===false?false:null
+      plausible:row.plausible===true||row.plausible===1?true:row.plausible===false||row.plausible===0?false:null
     });
   }
   return result;
