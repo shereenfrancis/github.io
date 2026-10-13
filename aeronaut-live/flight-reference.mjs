@@ -85,3 +85,17 @@ export function greatCirclePoints(a,b,steps=64){
   }
   return out;
 }
+
+export function normalizeAircraftIdentity(payload){
+ const a=payload?.response?.aircraft;
+ if(!a||typeof a!=='object')return null;
+ const take=(v)=>typeof v==='string'?v.trim().slice(0,120):'';
+ return {
+   registration:take(a.registration),type:take(a.type),icaoType:take(a.icao_type),
+   manufacturer:take(a.manufacturer),operator:take(a.registered_owner),
+   operatorCountry:take(a.registered_owner_country_name),
+   icao:take(a.mode_s).toLowerCase(),source:'ADSBDB',
+   // Aircraft ownership and operator can differ from a flight's marketed airline.
+   isFlightOperatorVerified:false
+ };
+}
