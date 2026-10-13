@@ -9,7 +9,7 @@ const status = { global: null, regional: null };
 const TTL = { global: 1200000, regional: 50000 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'X-Content-Type-Options': 'nosniff' };
 function json(res, code, data) {
-  const cachePolicy = code === 200 && Array.isArray(data?.aircraft) && !data.stale ? (data.scope === 'worldwide' || data.scope === 'sampled' ? 'public, s-maxage=1200, stale-while-revalidate=300' : 'public, s-maxage=50, stale-while-revalidate=20') : 'no-store';
+  const cachePolicy = code === 200 && Array.isArray(data?.aircraft) && !data.stale ? (data.scope === 'worldwide' || data.scope === 'sampled' ? 'public, s-maxage=1200, stale-while-revalidate=300' : data.scope === 'single' ? 'public, s-maxage=35, stale-while-revalidate=10' : 'public, s-maxage=50, stale-while-revalidate=20') : 'no-store';
   res.writeHead(code, { ...cors, 'Cache-Control': cachePolicy, 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
 }
@@ -121,6 +121,26 @@ async function regionalFeed(lat,lon) {
     throw new Error('Both regional providers failed. '+(problem?.message||'Unknown upstream error'));
   });
 }
+// The selected-plane endpoint uses the same real ADS-B sources as regional tracking.
+// It returns one current observation, not an invented route or historical track.
+async function trackedAircraft(icao) {
+  return cached('icao:'+icao,'regional',async()=>{
+    const endpoints=[
+      ['ADSB.lol','https://api.adsb.lol/v2/icao/'+icao],
+      ['Airplanes.live','https://api.airplanes.live/v2/hex/'+icao]
+    ];
+    let error;
+    for(const [provider,endpoint] of endpoints){
+      try {
+        const raw=await fetchJson(endpoint);
+        const aircraft=normalizeRegional(raw).filter(a=>a.id.toLowerCase()===icao.toLowerCase());
+        if(!aircraft.length){error=new Error(provider+' returned no fresh location');continue}
+        return {source:provider,scope:'single',retrievedAt:new Date().toISOString(),refreshSeconds:35,stale:false,aircraft};
+      }catch(e){error=e}
+    }
+    throw new Error('Aircraft location unavailable ('+(error?.message||'no report')+')');
+  });
+}
 export async function handle(req,res){
   const url = new URL(req.url||'/', 'http://localhost');
   if(req.method==='OPTIONS')return json(res,204,{});
@@ -129,6 +149,11 @@ export async function handle(req,res){
     if(url.pathname==='/api/health') return json(res,200,{status:'ok',time:new Date().toISOString(),note:'Server running; consult /api/status for aviation feeds'});
     if(url.pathname==='/api/status') return json(res,200,status);
     if(url.pathname==='/api/global') return json(res,200,await globalFeed());
+    if(url.pathname==='/api/track'){
+      const icao=String(url.searchParams.get('icao')||'').trim().toLowerCase();
+      if(!/^[a-f0-9]{6}$/.test(icao))return json(res,400,{error:'Specify a six-digit ICAO hex identifier'});
+      return json(res,200,await trackedAircraft(icao));
+    }
     if(url.pathname==='/api/aircraft'){
       const lat=Number(url.searchParams.get('lat')),lon=Number(url.searchParams.get('lon'));
       if(!Number.isFinite(lat)||!Number.isFinite(lon)||lat<-85||lat>85||lon<-180||lon>180)return json(res,400,{error:'Invalid latitude/longitude'});
