@@ -52,7 +52,7 @@ footer button{border:1px solid #617b79;color:#e1eee3;background:transparent;bord
 (()=> {
 const $=id=>document.getElementById(id); const cities={'Johannesburg':[-26.204,28.047],'Cape Town':[-33.925,18.424],London:[51.507,-.128],'New York':[40.713,-74.006],Dubai:[25.205,55.271],Tokyo:[35.676,139.65],Singapore:[1.352,103.82],Sydney:[-33.869,151.209]};
 let mode='global', aircraft=[],selected=null,markers=[],retrieved=0,loading=false, source='',expiry=0;
-let globeApi=null,view3d=true,observed=[],lastSelectedPoll=0;
+let globeApi=null,view3d=true,observed=[],lastSelectedPoll=0,requestRevision=0;
 const map=L.map('map',{worldCopyJump:true,zoomControl:false,preferCanvas:true}).setView([15,10],2);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',maxZoom:19,updateWhenIdle:true,keepBuffer:2}).addTo(map);
 L.control.zoom({position:'bottomright'}).addTo(map);
@@ -76,10 +76,10 @@ container.appendChild(fragment);if(list.length>100){const tip=document.createEle
 function select(id){const a=aircraft.find(x=>x.id===id);if(!a)return;selected=id;observed=[{lat:a.lat,lon:a.lon,time:Date.now()}];lastSelectedPoll=0;map.setView([a.lat,a.lon],Math.max(map.getZoom(),7));if(globeApi)globeApi.focus(a.lat,a.lon,1.85);const rows=[['ICAO identifier',a.id.toUpperCase()],['Position',a.lat.toFixed(4)+'°, '+a.lon.toFixed(4)+'°'],['Altitude',fm(a.alt)+' ft'],['Ground speed',fm(a.speed)+' kt'],['Heading',fm(a.heading)+'°'],['Ground status',a.ground?'On ground':'Airborne'],['Report age at retrieval',a.age+' seconds'],['Departure → destination','Not established by position data']];
 $('detail').innerHTML='<div class="eyebrow">OBSERVED AIRCRAFT</div><h2>'+esc(a.call||a.reg||a.id.toUpperCase())+'</h2><p class="small">'+esc(a.reg||a.type||a.country||'Registration not available')+'</p>'+rows.map(([l,v])=>'<div class="datum"><div class="eyebrow">'+esc(l)+'</div><div class="value">'+esc(v)+'</div></div>').join('');render();}
 async function refresh(force=false){if(loading)return;if(mode==='global'&&retrieved&&Date.now()-retrieved<1200000){setStatus('Global snapshot · refresh limited to 20 min');return}
-loading=true;$('refresh').disabled=true;setStatus('Retrieving '+(mode==='global'?'worldwide':'local')+' observations…');
+const revision=++requestRevision;loading=true;$('refresh').disabled=true;setStatus('Retrieving '+(mode==='global'?'worldwide':'local')+' observations…');
 try{
 const c=view3d&&globeApi?globeApi.center():map.getCenter();let url=mode==='global'?'/api/global':'/api/aircraft?lat='+c.lat.toFixed(3)+'&lon='+c.lng.toFixed(3);
-const r=await fetch(url,{headers:{Accept:'application/json'}});const raw=await r.json();if(!r.ok)throw Error(raw.detail||raw.error||'HTTP '+r.status);
+const r=await fetch(url,{headers:{Accept:'application/json'}});const raw=await r.json();if(revision!==requestRevision)return;if(!r.ok)throw Error(raw.detail||raw.error||'HTTP '+r.status);
 aircraft=raw.aircraft||[];source=raw.source||'Unknown';retrieved=Date.parse(raw.retrievedAt)||Date.now();expiry=Date.now()+(raw.refreshSeconds||50)*1000;
 $('source').textContent=source+' · '+aircraft.length.toLocaleString()+' observations';
 const partial=raw.scope==='sampled';
@@ -89,9 +89,9 @@ $('warning').textContent=raw.stale?'Delayed cached data: '+(raw.warning||'upstre
 if(partial){$('stamp').textContent='Partial global sample: '+(raw.sampledRegionCount||0)+' of '+(raw.totalSampleRegions||0)+' regions reporting. Not full worldwide coverage.';}
 setStatus(raw.stale?'Delayed positions':partial?'Partial global sample · '+aircraft.length.toLocaleString():'Positions received · '+aircraft.length.toLocaleString());if(!aircraft.some(x=>x.id===selected)){$('detail').innerHTML='<p class="small">Select an aircraft to inspect its report.</p>';selected=null}
 render();updateClock();
-}catch(e){setStatus('Flight data unavailable');$('warning').textContent=e.message; $('source').textContent='Server reached, upstream request failed';if(!aircraft.length)$('flights').textContent='Aircraft data unavailable: '+e.message+' — use Local live or retry.'}
-finally{loading=false;$('refresh').disabled=false}}
-function change(m){if(loading)return;mode=m;retrieved=0;aircraft=[];selected=null;observed=[];$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
+}catch(e){if(revision!==requestRevision)return;setStatus('Flight data unavailable');$('warning').textContent=e.message; $('source').textContent='Server reached, upstream request failed';if(!aircraft.length)$('flights').textContent='Aircraft data unavailable: '+e.message+' — use Local live or retry.'}
+finally{if(revision===requestRevision){loading=false;$('refresh').disabled=false}}}
+function change(m){requestRevision++;loading=false;mode=m;retrieved=0;aircraft=[];selected=null;observed=[];$('world').classList.toggle('active',m==='global');$('local').classList.toggle('active',m==='regional');$('scope').textContent=m==='global'?'WORLDWIDE / REPORTED POSITIONS':'LOCAL / REAL-TIME ADS-B REPORTS';$('title').textContent=m==='global'?'The world in motion':'Local flight observations';$('detail').innerHTML='<p class="small">Select a reported aircraft on the map.</p>';render();refresh(true);}
 $('world').onclick=()=>change('global');$('local').onclick=()=>change('regional');$('near').onclick=()=>change('regional');$('refresh').onclick=()=>refresh(true);$('search').oninput=render;
 for(const [name,ll]of Object.entries(cities)){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{map.setView(ll,8);if(globeApi)globeApi.focus(ll[0],ll[1],2.15);change('regional')};$('cities').appendChild(b)}
 map.on('moveend',()=>{if(mode==='regional')$('near').textContent='Load aircraft near this map centre →'});
