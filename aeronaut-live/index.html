@@ -134,11 +134,14 @@ async function startGlobe(){
   const planeGeometry=new THREE.Shape();
   planeGeometry.moveTo(0,.075);planeGeometry.lineTo(.014,.005);planeGeometry.lineTo(.065,-.025);planeGeometry.lineTo(.065,-.042);planeGeometry.lineTo(.011,-.028);planeGeometry.lineTo(.009,-.055);planeGeometry.lineTo(.028,-.068);planeGeometry.lineTo(.028,-.078);planeGeometry.lineTo(0,-.070);planeGeometry.lineTo(-.028,-.078);planeGeometry.lineTo(-.028,-.068);planeGeometry.lineTo(-.009,-.055);planeGeometry.lineTo(-.011,-.028);planeGeometry.lineTo(-.065,-.042);planeGeometry.lineTo(-.065,-.025);planeGeometry.lineTo(-.014,.005);planeGeometry.lineTo(0,.075);
   const geom=new THREE.ShapeGeometry(planeGeometry);
+  // The shape above is specified in world units. Normalize to a 1-unit symbol
+  // so the per-frame pixel-size calculation can control its real display size.
+  geom.scale(1/0.15,1/0.15,1);
   const materials=[new THREE.MeshBasicMaterial({color:0xc4f2d9,side:THREE.DoubleSide,depthTest:true}),new THREE.MeshBasicMaterial({color:0xf6cc89,side:THREE.DoubleSide,depthTest:true})];
   const instances=materials.map(m=>{const i=new THREE.InstancedMesh(geom,m,12000);i.count=0;i.frustumCulled=false;i.instanceMatrix.setUsage(THREE.DynamicDrawUsage);scene.add(i);return i});
   const dummy=new THREE.Object3D(),planeMappings=[[],[]],up=new THREE.Vector3(0,0,1),trackMat=new THREE.LineBasicMaterial({color:0xffd18f,transparent:true,opacity:.92,depthTest:true});
   let selectedTrail=null;const pickRay=new THREE.Raycaster(),pointer=new THREE.Vector2();
-  const ring=new THREE.Mesh(new THREE.RingGeometry(.018,.023,36),new THREE.MeshBasicMaterial({color:0xffdd96,side:THREE.DoubleSide,transparent:true,opacity:.95,depthTest:true}));scene.add(ring);ring.visible=false;
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.85,1.03,36),new THREE.MeshBasicMaterial({color:0xffdd96,side:THREE.DoubleSide,transparent:true,opacity:.95,depthTest:true}));scene.add(ring);ring.visible=false;
   function placePlanes(list,selected,history){
    planeMappings[0]=[];planeMappings[1]=[];
    for(const i of instances)i.count=0;
@@ -154,11 +157,11 @@ async function startGlobe(){
     const forward=north.multiplyScalar(Math.cos(hd)).addScaledVector(east,Math.sin(hd)).normalize();
     const right=new THREE.Vector3().crossVectors(forward,normal).normalize();
     const basis=new THREE.Matrix4().makeBasis(right,forward,normal);
-    dummy.position.copy(p);dummy.quaternion.setFromRotationMatrix(basis);dummy.scale.setScalar(a.id===selected?1.25:.72);dummy.updateMatrix();inst.setMatrixAt(at,dummy.matrix);planeMappings[ix][at]=a;
+    dummy.position.copy(p);dummy.quaternion.setFromRotationMatrix(basis);dummy.scale.setScalar(a.id===selected?.012:.007);dummy.updateMatrix();inst.setMatrixAt(at,dummy.matrix);planeMappings[ix][at]=a;
    }
    for(const i of instances){i.instanceMatrix.needsUpdate=true;if(i.count>0)i.computeBoundingSphere();else i.boundingSphere=null;}
    const sel=list.find(a=>a.id===selected);
-   if(sel){ring.visible=true;const normal=toPoint(sel.lat,sel.lon,1.036);ring.position.copy(normal);ring.quaternion.setFromUnitVectors(up,normal.clone().normalize());}
+   if(sel){ring.visible=true;const normal=toPoint(sel.lat,sel.lon,1.036);ring.position.copy(normal);ring.quaternion.setFromUnitVectors(up,normal.clone().normalize());ring.scale.setScalar(.015);}
    else ring.visible=false;
    if(selectedTrail){scene.remove(selectedTrail);selectedTrail.geometry.dispose();selectedTrail=null;}
    if(history&&history.length>1){
@@ -167,6 +170,11 @@ async function startGlobe(){
    }
   }
   let data=[],chosen=null,history=[];
+  // Markers are kept small in screen space when the globe is zoomed.
+  // Their spherical positions remain derived from actual ADS-B coordinates.
+  let renderedDistance=distance;
+  function markerScaleForCamera(){const viewport=Math.max(200,host.clientHeight);const fov=camera.fov*Math.PI/180;const worldPerPixel=2*Math.max(.12,distance-1.03)*Math.tan(fov/2)/viewport;return Math.min(.014,Math.max(.0018,worldPerPixel*13));}
+  function rescalePlaneMarkers(){if(!data.length)return;const scale=markerScaleForCamera();for(let g=0;g<instances.length;g++){const inst=instances[g];for(let j=0;j<inst.count;j++){const a=planeMappings[g][j];if(!a)continue;inst.getMatrixAt(j,dummy.matrix);dummy.matrix.decompose(dummy.position,dummy.quaternion,dummy.scale);dummy.scale.setScalar(a.id===chosen?scale*1.3:scale);dummy.updateMatrix();inst.setMatrixAt(j,dummy.matrix)}inst.instanceMatrix.needsUpdate=true;}ring.scale.setScalar(scale*1.7);}
   function positionCamera(){const target=toPoint(clat,clon,1);camera.position.copy(target.clone().multiplyScalar(distance));camera.up.set(0,1,0);camera.lookAt(origin);}
   positionCamera();
   function resize(){const w=Math.max(host.clientWidth,200),h=Math.max(host.clientHeight,250);camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
@@ -177,8 +185,8 @@ async function startGlobe(){
   renderer.domElement.addEventListener('pointermove',e=>{if(!dragging||!dragStart)return;const dx=e.clientX-dragStart.x,dy=e.clientY-dragStart.y;if(Math.hypot(dx,dy)>5)dragStart.moved=true;if(dragStart.moved){targetLon=dragStart.lon-dx*.32;targetLat=Math.max(-80,Math.min(80,dragStart.lat+dy*.28));}});
   renderer.domElement.addEventListener('pointerup',e=>{const wasMoved=dragStart?.moved;dragStart=null;dragging=false;if(wasMoved)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set(((e.clientX-rect.left)/rect.width)*2-1,-((e.clientY-rect.top)/rect.height)*2+1);pickRay.setFromCamera(pointer,camera);const hits=pickRay.intersectObjects(instances,false);const earthHit=pickRay.intersectObject(earth,false)[0];const hit=hits.find(h=>!earthHit||h.distance<earthHit.distance+.006);if(hit){const found=planeMappings[instances.indexOf(hit.object)]?.[hit.instanceId];if(found)select(found.id)}});
   renderer.domElement.addEventListener('wheel',e=>{e.preventDefault();distance=Math.max(1.55,Math.min(6,distance+Math.sign(e.deltaY)*.24))},{passive:false});
-  let running=true;function tick(){if(!running)return;clat+=(targetLat-clat)*.1;let delta=((targetLon-clon+540)%360)-180;clon+=delta*.1;positionCamera();renderer.render(scene,camera);requestAnimationFrame(tick)}tick();
-  return{setAircraft:(a,id,h)=>{data=a;chosen=id;history=h;placePlanes(data,chosen,history)},focus,center,resize};
+  let running=true;function tick(){if(!running)return;clat+=(targetLat-clat)*.1;let delta=((targetLon-clon+540)%360)-180;clon+=delta*.1;positionCamera();if(Math.abs(distance-renderedDistance)>.001){rescalePlaneMarkers();renderedDistance=distance}renderer.render(scene,camera);requestAnimationFrame(tick)}tick();
+  return{setAircraft:(a,id,h)=>{data=a;chosen=id;history=h;placePlanes(data,chosen,history);rescalePlaneMarkers()},focus,center,resize};
  }catch(e){$('globeHint').textContent='3D graphics unavailable: '+(e?.message||'module load error')+'. Use 2D MAP.';$('globeView').disabled=true;$('flatView').click();return null}
 }
 function setView3d(on){view3d=on;$('globe').style.display=on?'block':'none';$('map').style.display=on?'none':'block';$('globeView').classList.toggle('active',on);$('flatView').classList.toggle('active',!on);$('globeHint').style.display=on?'block':'none';if(!on)requestAnimationFrame(()=>map.invalidateSize());else if(globeApi)globeApi.resize();}
