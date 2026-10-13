@@ -141,7 +141,7 @@ async function startGlobe(){
     const ix=a.ground?1:0,inst=instances[ix],at=inst.count++;
     const p=toPoint(a.lat,a.lon,1.027);const normal=p.clone().normalize();
     const east=new THREE.Vector3(Math.sin(a.lon*Math.PI/180),0,Math.cos(a.lon*Math.PI/180)).normalize();
-    const north=new THREE.Vector3().crossVectors(east,normal).normalize();
+    const north=new THREE.Vector3().crossVectors(normal,east).normalize();
     const hd=(a.heading||0)*Math.PI/180;
     // Shape nose local +Y. Forward heading is clockwise from geographic north.
     const forward=north.multiplyScalar(Math.cos(hd)).addScaledVector(east,Math.sin(hd)).normalize();
