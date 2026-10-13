@@ -9,12 +9,14 @@ const status = { global: null, regional: null };
 const TTL = { global: 1200000, regional: 50000 };
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'X-Content-Type-Options': 'nosniff' };
 function json(res, code, data) {
-  const cachePolicy = code === 200 && Array.isArray(data?.aircraft) && !data.stale ? (data.scope === 'worldwide' ? 'public, s-maxage=1200, stale-while-revalidate=300' : 'public, s-maxage=50, stale-while-revalidate=20') : 'no-store';
+  const cachePolicy = code === 200 && Array.isArray(data?.aircraft) && !data.stale ? (data.scope === 'worldwide' || data.scope === 'sampled' ? 'public, s-maxage=1200, stale-while-revalidate=300' : 'public, s-maxage=50, stale-while-revalidate=20') : 'no-store';
   res.writeHead(code, { ...cors, 'Cache-Control': cachePolicy, 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
 }
 async function fetchJson(url) {
-  const r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'AeronautObservatory/1.0 (non-commercial flight tracking demo)' }, signal: AbortSignal.timeout(11000) });
+  let r;
+  try { r = await fetch(url, { headers: { Accept: 'application/json', 'User-Agent': 'AeronautObservatory/1.0 (non-commercial flight tracking demo)' }, signal: AbortSignal.timeout(9000) }); }
+  catch(e){ const reason=e?.cause?.code || e?.name || 'connection error'; throw new Error('Network connection failed ('+String(reason).slice(0,48)+')'); }
   if (!r.ok) { const e = new Error('Upstream HTTP ' + r.status); e.code = r.status; throw e; }
   return r.json();
 }
@@ -62,10 +64,43 @@ async function cached(key, group, producer) {
   try { return await pending; }
   finally { const current=cache.get(key); if(current?.pending===pending){if(item?.data)cache.set(key,item);else cache.delete(key);} }
 }
+// Deliberate geographic samples, not blanket worldwide ADS-B coverage.
+// Public region API radius is limited to 250 nautical miles; samples are visibly identified.
+const GLOBAL_SAMPLE_CENTERS=[
+  ['New York',40.713,-74.006],['Los Angeles',34.052,-118.244],
+  ['London',51.507,-0.128],['São Paulo',-23.55,-46.633],
+  ['Johannesburg',-26.204,28.047],['Dubai',25.205,55.271],
+  ['Singapore',1.352,103.820],['Tokyo',35.676,139.650],
+  ['Sydney',-33.869,151.209]
+];
 async function globalFeed() {
   return cached('global','global',async()=>{
-    const raw=await fetchJson('https://opensky-network.org/api/states/all');
-    return { source:'OpenSky Network',scope:'worldwide',retrievedAt:new Date().toISOString(),refreshSeconds:1200,stale:false,aircraft:normalizeGlobal(raw) };
+    let openSkyError=null;
+    try {
+      const raw=await fetchJson('https://opensky-network.org/api/states/all');
+      return { source:'OpenSky Network',scope:'worldwide',retrievedAt:new Date().toISOString(),refreshSeconds:1200,stale:false,aircraft:normalizeGlobal(raw) };
+    } catch(e) { openSkyError=e; }
+    // Cloud-hosted OpenSky requests can fail. Recover with real, but geographically
+    // incomplete, observations. Never misrepresent the sample as a full-world feed.
+    const results=await Promise.allSettled(GLOBAL_SAMPLE_CENTERS.map(async([city,lat,lon])=>({city, snapshot:await regionalFeed(lat,lon)})));
+    const good=results.filter(r=>r.status==='fulfilled').map(r=>r.value);
+    if(!good.length) {
+      throw new Error('OpenSky unavailable ('+(openSkyError?.message||'network failure')+'); all regional fallback sources unavailable');
+    }
+    const deduped=new Map();
+    for(const {snapshot} of good) {
+      for(const aircraft of snapshot.aircraft) {
+        const prior=deduped.get(aircraft.id);
+        if(!prior || aircraft.age<prior.age) deduped.set(aircraft.id,aircraft);
+      }
+    }
+    return {
+      source:'ADSB.lol / Airplanes.live regional samples',scope:'sampled',
+      sampledRegions:good.map(x=>x.city), sampledRegionCount:good.length,
+      totalSampleRegions:GLOBAL_SAMPLE_CENTERS.length,
+      warning:'PARTIAL COVERAGE: Observations are sampled around '+good.length+' selected cities only, not across the entire world. OpenSky global feed could not be reached.',
+      retrievedAt:new Date().toISOString(),refreshSeconds:1200,stale:false,aircraft:[...deduped.values()]
+    };
   });
 }
 async function regionalFeed(lat,lon) {
