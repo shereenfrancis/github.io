@@ -123,6 +123,15 @@ async function regionalFeed(lat,lon) {
 }
 // The selected-plane endpoint uses the same real ADS-B sources as regional tracking.
 // It returns one current observation, not an invented route or historical track.
+// Open-Meteo geocoding supports worldwide city-name lookup without an API key.
+// Only use returned coordinates; city discovery never fabricates flight observations.
+async function findCities(query) {
+  const endpoint='https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(query)+'&count=10&language=en&format=json';
+  const data=await fetchJson(endpoint);
+  return {results:(Array.isArray(data.results)?data.results:[]).filter(c=>Number.isFinite(c.latitude)&&Number.isFinite(c.longitude))
+    .map(c=>({name:String(c.name||''),country:String(c.country||''),region:String(c.admin1||''),latitude:c.latitude,longitude:c.longitude})),
+    source:'Open-Meteo Geocoding'};
+}
 async function trackedAircraft(icao) {
   return cached('icao:'+icao,'regional',async()=>{
     const endpoints=[
@@ -149,6 +158,7 @@ export async function handle(req,res){
     if(url.pathname==='/api/health') return json(res,200,{status:'ok',time:new Date().toISOString(),note:'Server running; consult /api/status for aviation feeds'});
     if(url.pathname==='/api/status') return json(res,200,status);
     if(url.pathname==='/api/global') return json(res,200,await globalFeed());
+    if(url.pathname==='/api/cities'){const q=String(url.searchParams.get('q')||'').trim();if(q.length<2||q.length>100)return json(res,400,{error:'City search requires 2–100 characters'});return json(res,200,await findCities(q));}
     if(url.pathname==='/api/track'){
       const icao=String(url.searchParams.get('icao')||'').trim().toLowerCase();
       if(!/^[a-f0-9]{6}$/.test(icao))return json(res,400,{error:'Specify a six-digit ICAO hex identifier'});
